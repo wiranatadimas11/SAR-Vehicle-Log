@@ -61,3 +61,4 @@ Jangan memasukkan service role key ke browser atau repository.
 4. Deploy project.
 
 QR Code kendaraan cukup dibuat dengan tujuan URL website utama. Semua QR Code memiliki tujuan yang sama dan tidak memilih kendaraan otomatis.
+Vercel deployment test

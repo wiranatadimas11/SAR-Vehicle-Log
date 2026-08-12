@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --background: 210 25% 97%; --foreground: 214 35% 14%; --card: 0 0% 100%; --card-foreground: 214 35% 14%; --primary: 4 76% 45%; --primary-foreground: 0 0% 100%; --secondary: 210 22% 93%; --secondary-foreground: 214 35% 20%; --muted: 210 18% 92%; --muted-foreground: 214 14% 44%; --accent: 197 66% 36%; --accent-foreground: 0 0% 100%; --border: 210 20% 86%; --input: 210 20% 86%; --ring: 4 76% 45%; --radius: 1rem; }
+@layer base { * { @apply border-border; } body { @apply bg-background text-foreground antialiased; } }
+@layer components {
+  .field { @apply flex h-12 w-full rounded-xl border bg-white px-4 text-sm outline-none transition focus:border-red-700 focus:ring-2 focus:ring-red-700/10; }
+  .label { @apply mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500; }
+  .card { @apply rounded-2xl border bg-white shadow-sm; }
+}

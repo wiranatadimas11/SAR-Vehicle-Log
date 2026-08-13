@@ -49,6 +49,7 @@ type FormState = {
   destination: string;
   purpose: string;
   km: string;
+  fuelPercentage: string;
   condition: string;
   notes: string;
   photo: File | null;
@@ -60,6 +61,7 @@ const initialForm: FormState = {
   destination: '',
   purpose: '',
   km: '',
+  fuelPercentage: '',
   condition: 'BAIK',
   notes: '',
   photo: null,
@@ -69,7 +71,7 @@ const initialForm: FormState = {
    PHOTO CONFIG
 ========================================================= */
 
-const MAX_PHOTO_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
 
 const ALLOWED_PHOTO_TYPES = [
   'image/jpeg',
@@ -98,6 +100,52 @@ function formatKm(value: number | string | null) {
   return new Intl.NumberFormat('id-ID').format(
     Number(value) || 0
   );
+}
+
+function formatFuel(value: number | string | null) {
+  if (value === null || value === undefined) {
+    return '-';
+  }
+
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return '-';
+  }
+
+  return `${number}%`;
+}
+
+/* =========================================================
+   CALCULATE FUEL
+========================================================= */
+
+function calculateFuelUsed(
+  fuelExit: number | string | null,
+  fuelEntry: number | string | null
+) {
+  if (
+    fuelExit === null ||
+    fuelExit === undefined ||
+    fuelEntry === null ||
+    fuelEntry === undefined
+  ) {
+    return null;
+  }
+
+  const exit = Number(fuelExit);
+  const entry = Number(fuelEntry);
+
+  if (
+    !Number.isFinite(exit) ||
+    !Number.isFinite(entry)
+  ) {
+    return null;
+  }
+
+  const result = exit - entry;
+
+  return Math.max(0, result);
 }
 
 /* =========================================================
@@ -299,6 +347,9 @@ export default function SarApp() {
     setForm((current) => ({
       ...current,
       vehicleId: vehicle.id,
+      fuelPercentage: '',
+      km: '',
+      photo: null,
     }));
   };
 
@@ -381,7 +432,8 @@ export default function SarApp() {
       !form.vehicleId ||
       !form.destination ||
       !form.purpose ||
-      !form.km
+      !form.km ||
+      !form.fuelPercentage
     ) {
       setError(
         'Lengkapi semua kolom wajib terlebih dahulu.'
@@ -398,6 +450,23 @@ export default function SarApp() {
     ) {
       setError(
         'KM odometer tidak valid.'
+      );
+
+      return;
+    }
+
+    const fuelPercentage =
+      Number(form.fuelPercentage);
+
+    if (
+      !Number.isFinite(
+        fuelPercentage
+      ) ||
+      fuelPercentage < 0 ||
+      fuelPercentage > 100
+    ) {
+      setError(
+        'Persentase BBM harus antara 0% sampai 100%.'
       );
 
       return;
@@ -422,10 +491,9 @@ export default function SarApp() {
       return;
     }
 
-    /*
-     * Jangan izinkan kendaraan yang sudah digunakan
-     * untuk keluar lagi.
-     */
+    /* =====================================================
+       VEHICLE AVAILABILITY CHECK
+    ===================================================== */
 
     if (
       vehicle.status !==
@@ -501,7 +569,18 @@ export default function SarApp() {
         purpose:
           form.purpose.trim(),
 
-        km_exit: km,
+        km_exit:
+          km,
+
+        fuel_exit_percentage:
+          fuelPercentage,
+
+        /*
+         * Saat kendaraan baru keluar,
+         * BBM terpakai belum diketahui.
+         */
+        fuel_used_percentage:
+          null,
 
         exit_odometer_photo:
           path,
@@ -519,11 +598,6 @@ export default function SarApp() {
         'INSERT LOG ERROR:',
         logError
       );
-
-      /*
-       * Hapus foto jika insert log gagal
-       * supaya tidak meninggalkan file yatim.
-       */
 
       await supabase.storage
         .from('vehicle-odometer')
@@ -550,7 +624,8 @@ export default function SarApp() {
         status:
           'SEDANG DIGUNAKAN',
 
-        current_km: km,
+        current_km:
+          km,
 
         updated_at:
           new Date().toISOString(),
@@ -600,8 +675,15 @@ export default function SarApp() {
     setError(null);
     setMessage(null);
 
+    if (!activeLog) {
+      setError(
+        'Data perjalanan kendaraan tidak ditemukan.'
+      );
+
+      return;
+    }
+
     if (
-      !activeLog ||
       !form.photo ||
       !uploadablePhoto(form.photo)
     ) {
@@ -615,6 +697,14 @@ export default function SarApp() {
     if (!form.km) {
       setError(
         'Isi KM odometer masuk terlebih dahulu.'
+      );
+
+      return;
+    }
+
+    if (!form.fuelPercentage) {
+      setError(
+        'Isi persentase BBM masuk terlebih dahulu.'
       );
 
       return;
@@ -644,8 +734,55 @@ export default function SarApp() {
       return;
     }
 
+    const fuelPercentage =
+      Number(form.fuelPercentage);
+
+    if (
+      !Number.isFinite(
+        fuelPercentage
+      ) ||
+      fuelPercentage < 0 ||
+      fuelPercentage > 100
+    ) {
+      setError(
+        'Persentase BBM harus antara 0% sampai 100%.'
+      );
+
+      return;
+    }
+
+    const fuelExit =
+      Number(
+        activeLog.fuel_exit_percentage
+      );
+
+    if (
+      Number.isFinite(fuelExit) &&
+      fuelPercentage > fuelExit
+    ) {
+      setError(
+        'Persentase BBM masuk tidak boleh lebih besar dari BBM keluar.'
+      );
+
+      return;
+    }
+
+    /* =====================================================
+       TOTAL JARAK
+    ===================================================== */
+
     const totalDistance =
       km - kmExit;
+
+    /* =====================================================
+       TOTAL FUEL PERCENTAGE
+    ===================================================== */
+
+    const fuelUsed =
+      calculateFuelUsed(
+        activeLog.fuel_exit_percentage,
+        fuelPercentage
+      );
 
     setSaving(true);
 
@@ -718,7 +855,22 @@ export default function SarApp() {
         entry_time:
           new Date().toISOString(),
 
-        km_entry: km,
+        km_entry:
+          km,
+
+        fuel_entry_percentage:
+          fuelPercentage,
+
+        /*
+         * TOTAL FUEL PERCENTAGE
+         *
+         * Contoh:
+         * BBM keluar = 80%
+         * BBM masuk  = 55%
+         * Fuel used  = 25%
+         */
+        fuel_used_percentage:
+          fuelUsed,
 
         total_distance:
           totalDistance,
@@ -773,7 +925,8 @@ export default function SarApp() {
         status:
           'TERSEDIA',
 
-        current_km: km,
+        current_km:
+          km,
 
         updated_at:
           new Date().toISOString(),
@@ -801,7 +954,9 @@ export default function SarApp() {
     }
 
     setMessage(
-      'Data kendaraan masuk berhasil disimpan.'
+      fuelUsed !== null
+        ? `Data kendaraan masuk berhasil disimpan. Total BBM terpakai ${fuelUsed}%.`
+        : 'Data kendaraan masuk berhasil disimpan.'
     );
 
     setMode('home');
@@ -833,9 +988,7 @@ export default function SarApp() {
           <Field
             label="Nama Personel"
             icon={
-              <UserRound
-                size={17}
-              />
+              <UserRound size={17} />
             }
           >
             <input
@@ -857,9 +1010,7 @@ export default function SarApp() {
           <Field
             label="Kendaraan"
             icon={
-              <CarFront
-                size={17}
-              />
+              <CarFront size={17} />
             }
           >
             <select
@@ -911,9 +1062,7 @@ export default function SarApp() {
             <Field
               label="Tanggal"
               icon={
-                <Clock3
-                  size={17}
-                />
+                <Clock3 size={17} />
               }
             >
               <input
@@ -934,9 +1083,7 @@ export default function SarApp() {
             <Field
               label="Jam Keluar"
               icon={
-                <Clock3
-                  size={17}
-                />
+                <Clock3 size={17} />
               }
             >
               <input
@@ -959,9 +1106,7 @@ export default function SarApp() {
             <Field
               label="Tujuan"
               icon={
-                <MapPin
-                  size={17}
-                />
+                <MapPin size={17} />
               }
             >
               <input
@@ -1024,6 +1169,58 @@ export default function SarApp() {
               }
               placeholder="0"
             />
+          </Field>
+
+          {/* =================================================
+              BBM KELUAR
+          ================================================= */}
+
+          <Field
+            label="Persentase BBM Keluar"
+            icon={
+              <Gauge size={17} />
+            }
+          >
+            <div className="relative">
+              <input
+                className="field pr-12"
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                value={
+                  form.fuelPercentage
+                }
+                onChange={(e) => {
+                  const value =
+                    e.target.value;
+
+                  if (
+                    value === '' ||
+                    (
+                      Number(value) >= 0 &&
+                      Number(value) <= 100
+                    )
+                  ) {
+                    setForm({
+                      ...form,
+                      fuelPercentage:
+                        value,
+                    });
+                  }
+                }}
+                placeholder="Contoh: 80"
+              />
+
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">
+                %
+              </span>
+            </div>
+
+            <p className="mt-2 text-xs text-slate-500">
+              Isi perkiraan persentase BBM
+              saat kendaraan berangkat.
+            </p>
           </Field>
 
           <PhotoField
@@ -1114,6 +1311,7 @@ export default function SarApp() {
         }
       >
         <div className="space-y-5">
+
           {!activeLog && (
             <div>
               <p className="label">
@@ -1169,6 +1367,11 @@ export default function SarApp() {
               onSubmit={saveEntry}
               className="space-y-5"
             >
+
+              {/* =================================================
+                  DETAIL KEBERANGKATAN
+              ================================================= */}
+
               <div className="rounded-2xl border border-red-100 bg-red-50 p-5">
                 <p className="text-xs font-bold uppercase tracking-wider text-red-700">
                   Detail keberangkatan
@@ -1183,6 +1386,7 @@ export default function SarApp() {
                 </h3>
 
                 <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+
                   <Info
                     label="Personel"
                     value={
@@ -1210,15 +1414,32 @@ export default function SarApp() {
                       activeLog.km_exit
                     )} KM`}
                   />
+
+                  <Info
+                    label="BBM keluar"
+                    value={formatFuel(
+                      activeLog.fuel_exit_percentage
+                    )}
+                  />
+
+                  <Info
+                    label="Keperluan"
+                    value={
+                      activeLog.purpose
+                    }
+                  />
+
                 </div>
               </div>
+
+              {/* =================================================
+                  KM MASUK
+              ================================================= */}
 
               <Field
                 label="KM / Odometer Masuk"
                 icon={
-                  <Gauge
-                    size={17}
-                  />
+                  <Gauge size={17} />
                 }
               >
                 <input
@@ -1261,11 +1482,157 @@ export default function SarApp() {
                   </div>
                 )}
 
+              {/* =================================================
+                  BBM MASUK
+              ================================================= */}
+
+              <Field
+                label="Persentase BBM Masuk"
+                icon={
+                  <Gauge size={17} />
+                }
+              >
+                <div className="relative">
+                  <input
+                    className="field pr-12"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={
+                      form.fuelPercentage
+                    }
+                    onChange={(e) => {
+                      const value =
+                        e.target.value;
+
+                      if (
+                        value === '' ||
+                        (
+                          Number(value) >= 0 &&
+                          Number(value) <= 100
+                        )
+                      ) {
+                        setForm({
+                          ...form,
+                          fuelPercentage:
+                            value,
+                        });
+                      }
+                    }}
+                    placeholder="Contoh: 55"
+                  />
+
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">
+                    %
+                  </span>
+                </div>
+
+                <p className="mt-2 text-xs text-slate-500">
+                  BBM saat kendaraan kembali.
+                </p>
+              </Field>
+
+              {/* =================================================
+                  TOTAL FUEL PERCENTAGE
+              ================================================= */}
+
+              {form.fuelPercentage &&
+                Number(
+                  form.fuelPercentage
+                ) <=
+                  Number(
+                    activeLog.fuel_exit_percentage
+                  ) && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+
+                    <div className="flex items-start justify-between gap-4">
+
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
+                          Total Fuel Percentage
+                        </p>
+
+                        <p className="mt-1 text-sm font-semibold text-amber-800">
+                          BBM terpakai selama perjalanan
+                        </p>
+                      </div>
+
+                      <div className="text-right">
+                        <p className="text-3xl font-black text-amber-900">
+                          {formatFuel(
+                            calculateFuelUsed(
+                              activeLog.fuel_exit_percentage,
+                              form.fuelPercentage
+                            )
+                          )}
+                        </p>
+                      </div>
+
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+
+                      <div className="rounded-xl bg-white/70 p-3">
+                        <p className="text-xs text-amber-700">
+                          BBM Keluar
+                        </p>
+
+                        <p className="mt-1 text-lg font-black text-slate-900">
+                          {formatFuel(
+                            activeLog.fuel_exit_percentage
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl bg-white/70 p-3">
+                        <p className="text-xs text-amber-700">
+                          BBM Masuk
+                        </p>
+
+                        <p className="mt-1 text-lg font-black text-slate-900">
+                          {formatFuel(
+                            form.fuelPercentage
+                          )}
+                        </p>
+                      </div>
+
+                    </div>
+
+                    <div className="mt-3 rounded-xl bg-amber-100 px-4 py-3 text-xs font-semibold text-amber-800">
+                      {formatFuel(
+                        activeLog.fuel_exit_percentage
+                      )}{' '}
+                      −{' '}
+                      {formatFuel(
+                        form.fuelPercentage
+                      )}{' '}
+                      ={' '}
+                      {formatFuel(
+                        calculateFuelUsed(
+                          activeLog.fuel_exit_percentage,
+                          form.fuelPercentage
+                        )
+                      )}{' '}
+                      BBM terpakai
+                    </div>
+
+                  </div>
+                )}
+
+              {/* =================================================
+                  PHOTO
+              ================================================= */}
+
               <PhotoField
                 file={form.photo}
                 onChange={updatePhoto}
                 label="Foto Odometer Masuk"
               />
+
+              {/* =================================================
+                  CONDITION
+              ================================================= */}
 
               <Field label="Kondisi Kendaraan">
                 <select
@@ -1292,6 +1659,10 @@ export default function SarApp() {
                   )}
                 </select>
               </Field>
+
+              {/* =================================================
+                  NOTES
+              ================================================= */}
 
               <Field label="Catatan">
                 <textarea
@@ -1327,6 +1698,7 @@ export default function SarApp() {
                   size={18}
                 />
               </button>
+
             </form>
           )}
         </div>
@@ -1340,9 +1712,13 @@ export default function SarApp() {
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#fee2e2,_transparent_32%),linear-gradient(180deg,#f8fafc_0%,#eef2f6_100%)]">
+
       <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-5 py-6 sm:px-8">
+
         <header className="flex items-center justify-between">
+
           <div className="flex items-center gap-3">
+
             <div className="grid h-11 w-11 place-items-center rounded-2xl bg-red-700 text-white shadow-lg shadow-red-700/20">
               <CarFront size={22} />
             </div>
@@ -1356,6 +1732,7 @@ export default function SarApp() {
                 SAR Vehicle Log
               </h1>
             </div>
+
           </div>
 
           <a
@@ -1367,10 +1744,13 @@ export default function SarApp() {
               size={20}
             />
           </a>
+
         </header>
 
         <section className="flex flex-1 flex-col justify-center py-16">
+
           <div className="mx-auto w-full max-w-2xl text-center">
+
             <p className="mb-3 text-sm font-semibold text-slate-500">
               Pencatatan Kendaraan
               SAR
@@ -1394,12 +1774,14 @@ export default function SarApp() {
             </p>
 
             <div className="mt-10 grid gap-4 sm:grid-cols-2">
+
               <button
                 onClick={() =>
                   void begin('exit')
                 }
                 className="group relative flex min-h-40 flex-col items-start justify-between rounded-3xl bg-red-700 p-6 text-left text-white shadow-xl shadow-red-700/20 transition hover:-translate-y-1 hover:bg-red-800"
               >
+
                 <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/15">
                   <LogOut size={22} />
                 </span>
@@ -1420,6 +1802,7 @@ export default function SarApp() {
                   className="absolute right-6 bottom-6 transition group-hover:translate-x-1"
                   size={20}
                 />
+
               </button>
 
               <button
@@ -1428,6 +1811,7 @@ export default function SarApp() {
                 }
                 className="group relative flex min-h-40 flex-col items-start justify-between rounded-3xl bg-slate-900 p-6 text-left text-white shadow-xl shadow-slate-900/15 transition hover:-translate-y-1 hover:bg-slate-800"
               >
+
                 <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10">
                   <LogIn size={22} />
                 </span>
@@ -1448,18 +1832,23 @@ export default function SarApp() {
                   className="absolute right-6 bottom-6 transition group-hover:translate-x-1"
                   size={20}
                 />
+
               </button>
+
             </div>
 
             {message && (
               <div className="mx-auto mt-6 max-w-lg rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-left text-emerald-800">
+
                 <div className="flex gap-3">
+
                   <CheckCircle2
                     className="shrink-0"
                     size={20}
                   />
 
                   <div>
+
                     <p className="font-bold">
                       {message}
                     </p>
@@ -1469,8 +1858,11 @@ export default function SarApp() {
                       sudah masuk ke
                       sistem monitoring.
                     </p>
+
                   </div>
+
                 </div>
+
               </div>
             )}
 
@@ -1479,10 +1871,13 @@ export default function SarApp() {
                 {error}
               </div>
             )}
+
           </div>
+
         </section>
 
         <footer className="flex items-center justify-between border-t border-slate-200/70 pt-5 text-xs text-slate-400">
+
           <span>
             Internal Operations
             System
@@ -1494,8 +1889,11 @@ export default function SarApp() {
             />
             Secure field logging
           </span>
+
         </footer>
+
       </div>
+
     </main>
   );
 }
@@ -1517,7 +1915,9 @@ function FormShell({
 }) {
   return (
     <main className="min-h-screen bg-slate-50">
+
       <div className="mx-auto max-w-2xl px-5 py-6 sm:px-8">
+
         <button
           onClick={onBack}
           className="mb-8 flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-red-700"
@@ -1529,6 +1929,7 @@ function FormShell({
         </button>
 
         <div className="mb-8">
+
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-700">
             SAR Vehicle Log
           </p>
@@ -1540,12 +1941,15 @@ function FormShell({
           <p className="mt-2 text-sm text-slate-500">
             {subtitle}
           </p>
+
         </div>
 
         <div className="card p-5 sm:p-8">
           {children}
         </div>
+
       </div>
+
     </main>
   );
 }
@@ -1565,12 +1969,14 @@ function Field({
 }) {
   return (
     <label className="block">
+
       <span className="label flex items-center gap-2">
         {icon}
         {label}
       </span>
 
       {children}
+
     </label>
   );
 }
@@ -1592,7 +1998,9 @@ function PhotoField({
 }) {
   return (
     <div>
+
       <span className="label flex items-center gap-2">
+
         <Camera size={17} />
 
         {label}
@@ -1600,10 +2008,13 @@ function PhotoField({
         <span className="text-red-700">
           *
         </span>
+
       </span>
 
       <label className="flex cursor-pointer items-center gap-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 transition hover:border-red-300 hover:bg-red-50/40">
+
         <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white text-red-700 shadow-sm">
+
           {file ? (
             <CheckCircle2
               size={21}
@@ -1611,9 +2022,11 @@ function PhotoField({
           ) : (
             <Upload size={21} />
           )}
+
         </span>
 
         <span>
+
           <span className="block text-sm font-bold">
             {file
               ? file.name
@@ -1624,6 +2037,7 @@ function PhotoField({
             JPG, PNG, WEBP ·
             maksimal 10 MB
           </span>
+
         </span>
 
         <input
@@ -1633,7 +2047,9 @@ function PhotoField({
           className="hidden"
           onChange={onChange}
         />
+
       </label>
+
     </div>
   );
 }
@@ -1679,6 +2095,7 @@ function Info({
 }) {
   return (
     <div>
+
       <p className="text-xs text-red-700/70">
         {label}
       </p>
@@ -1686,6 +2103,7 @@ function Info({
       <p className="mt-1 font-semibold text-slate-800">
         {value}
       </p>
+
     </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
 import {
   BarChart3,
   CarFront,
@@ -17,7 +18,10 @@ import {
   ShieldCheck,
   Truck,
   X,
+  Fuel,
+  TrendingDown,
 } from 'lucide-react';
+
 import * as XLSX from 'xlsx';
 
 import {
@@ -27,12 +31,22 @@ import {
   VehicleStatus,
 } from '@/lib/supabase';
 
+/* =========================================================
+   TYPES
+========================================================= */
+
 type Section =
   | 'login'
   | 'dashboard'
   | 'log'
   | 'vehicles'
   | 'reports';
+
+type AdminVehicleLog = VehicleLog & {
+  fuel_exit_percentage: number | null;
+  fuel_entry_percentage: number | null;
+  fuel_used_percentage: number | null;
+};
 
 const statusOptions: VehicleStatus[] = [
   'TERSEDIA',
@@ -45,13 +59,28 @@ const statusOptions: VehicleStatus[] = [
    HELPER
 ========================================================= */
 
-function fmt(value: string | number | null) {
-  if (value === null || value === undefined) return '-';
+function fmt(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
 
   return new Intl.NumberFormat('id-ID').format(Number(value));
 }
 
-function date(value: string | null) {
+function fmtDecimal(
+  value: string | number | null | undefined
+) {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+
+  return new Intl.NumberFormat('id-ID', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(Number(value));
+}
+
+function date(value: string | null | undefined) {
   if (!value) return '-';
 
   return new Intl.DateTimeFormat('id-ID', {
@@ -60,8 +89,166 @@ function date(value: string | null) {
   }).format(new Date(value));
 }
 
+function onlyDate(value: string | null | undefined) {
+  if (!value) return '-';
+
+  return new Intl.DateTimeFormat('id-ID', {
+    dateStyle: 'medium',
+  }).format(new Date(value));
+}
+
 function today() {
   return new Date().toISOString().slice(0, 10);
+}
+
+/* =========================================================
+   FUEL HELPER
+========================================================= */
+
+function calculateFuelUsed(
+  exitFuel: number | null | undefined,
+  entryFuel: number | null | undefined,
+  storedFuel: number | null | undefined
+) {
+  if (
+    storedFuel !== null &&
+    storedFuel !== undefined
+  ) {
+    return Number(storedFuel);
+  }
+
+  if (
+    exitFuel === null ||
+    exitFuel === undefined ||
+    entryFuel === null ||
+    entryFuel === undefined
+  ) {
+    return null;
+  }
+
+  const result =
+    Number(exitFuel) - Number(entryFuel);
+
+  return Math.max(0, result);
+}
+
+/* =========================================================
+   FUEL BADGE
+========================================================= */
+
+function FuelBadge({
+  value,
+}: {
+  value: number | null | undefined;
+}) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return (
+      <span className="text-slate-400">
+        -
+      </span>
+    );
+  }
+
+  const percentage = Math.min(
+    100,
+    Math.max(0, Number(value))
+  );
+
+  let barColor = 'bg-emerald-600';
+  let textColor = 'text-emerald-700';
+
+  if (percentage >= 50) {
+    barColor = 'bg-red-600';
+    textColor = 'text-red-700';
+  } else if (percentage >= 25) {
+    barColor = 'bg-amber-500';
+    textColor = 'text-amber-700';
+  }
+
+  return (
+    <div className="min-w-[145px]">
+      <div className="mb-1.5 flex items-center justify-between gap-3">
+        <span className="text-xs text-slate-500">
+          Terpakai
+        </span>
+
+        <span
+          className={`font-black ${textColor}`}
+        >
+          {fmtDecimal(percentage)}%
+        </span>
+      </div>
+
+      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+        <div
+          className={`h-full rounded-full transition-all ${barColor}`}
+          style={{
+            width: `${percentage}%`,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   FUEL LEVEL
+========================================================= */
+
+function FuelLevel({
+  value,
+}: {
+  value: number | null | undefined;
+}) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return (
+      <span className="text-slate-400">
+        -
+      </span>
+    );
+  }
+
+  const percentage = Math.min(
+    100,
+    Math.max(0, Number(value))
+  );
+
+  let color = 'bg-emerald-500';
+
+  if (percentage <= 25) {
+    color = 'bg-red-500';
+  } else if (percentage <= 50) {
+    color = 'bg-amber-500';
+  }
+
+  return (
+    <div className="min-w-[110px]">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-xs text-slate-500">
+          Level
+        </span>
+
+        <span className="text-xs font-black text-slate-700">
+          {fmtDecimal(percentage)}%
+        </span>
+      </div>
+
+      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+        <div
+          className={`h-full rounded-full ${color}`}
+          style={{
+            width: `${percentage}%`,
+          }}
+        />
+      </div>
+    </div>
+  );
 }
 
 /* =========================================================
@@ -72,7 +259,7 @@ function PhotoLink({
   path,
   label,
 }: {
-  path: string | null;
+  path: string | null | undefined;
   label: string;
 }) {
   if (!path) {
@@ -116,8 +303,11 @@ export default function AdminApp({
 }: {
   section: Section;
 }) {
-  const [authorized, setAuthorized] = useState(false);
-  const [checking, setChecking] = useState(true);
+  const [authorized, setAuthorized] =
+    useState(false);
+
+  const [checking, setChecking] =
+    useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -172,7 +362,9 @@ export default function AdminApp({
     return <Login />;
   }
 
-  return <AdminLayout section={section} />;
+  return (
+    <AdminLayout section={section} />
+  );
 }
 
 /* =========================================================
@@ -180,10 +372,17 @@ export default function AdminApp({
 ========================================================= */
 
 function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [email, setEmail] =
+    useState('');
+
+  const [password, setPassword] =
+    useState('');
+
+  const [error, setError] =
+    useState('');
+
+  const [saving, setSaving] =
+    useState(false);
 
   const submit = async (
     event: React.FormEvent
@@ -199,19 +398,29 @@ function Login() {
     const {
       data: authData,
       error: loginError,
-    } = await supabase.auth.signInWithPassword({
-      email: cleanEmail,
-      password,
-    });
+    } =
+      await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
 
-    console.log('AUTH DATA:', authData);
-    console.log('AUTH ERROR:', loginError);
+    console.log(
+      'AUTH DATA:',
+      authData
+    );
+
+    console.log(
+      'AUTH ERROR:',
+      loginError
+    );
 
     if (loginError) {
       setSaving(false);
+
       setError(
         `Login gagal: ${loginError.message}`
       );
+
       return;
     }
 
@@ -228,6 +437,7 @@ function Login() {
       await supabase.auth.signOut();
 
       setSaving(false);
+
       setError(
         'Session admin tidak berhasil dibuat.'
       );
@@ -238,13 +448,17 @@ function Login() {
     const {
       data: adminRow,
       error: adminError,
-    } = await supabase
-      .from('admins')
-      .select(
-        'id, email, name, active'
-      )
-      .eq('email', cleanEmail)
-      .maybeSingle();
+    } =
+      await supabase
+        .from('admins')
+        .select(
+          'id, email, name, active'
+        )
+        .eq(
+          'email',
+          cleanEmail
+        )
+        .maybeSingle();
 
     console.log(
       'ADMIN ROW:',
@@ -357,7 +571,9 @@ function Login() {
                 type="email"
                 value={email}
                 onChange={(e) =>
-                  setEmail(e.target.value)
+                  setEmail(
+                    e.target.value
+                  )
                 }
                 placeholder="admin@organisasi.id"
                 required
@@ -374,7 +590,9 @@ function Login() {
                 type="password"
                 value={password}
                 onChange={(e) =>
-                  setPassword(e.target.value)
+                  setPassword(
+                    e.target.value
+                  )
                 }
                 placeholder="Masukkan password"
                 required
@@ -612,7 +830,7 @@ function useData() {
     useState<Vehicle[]>([]);
 
   const [logs, setLogs] =
-    useState<VehicleLog[]>([]);
+    useState<AdminVehicleLog[]>([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -658,15 +876,31 @@ function useData() {
       logResult.data
     );
 
+    const normalizedLogs =
+      ((logResult.data ??
+        []) as AdminVehicleLog[]).map(
+        (log) => {
+          const fuelUsed =
+            calculateFuelUsed(
+              log.fuel_exit_percentage,
+              log.fuel_entry_percentage,
+              log.fuel_used_percentage
+            );
+
+          return {
+            ...log,
+            fuel_used_percentage:
+              fuelUsed,
+          };
+        }
+      );
+
     setVehicles(
       (vehicleResult.data as Vehicle[]) ??
         []
     );
 
-    setLogs(
-      (logResult.data as VehicleLog[]) ??
-        []
-    );
+    setLogs(normalizedLogs);
 
     setLoading(false);
   };
@@ -735,7 +969,8 @@ function Dashboard() {
       label: 'Tersedia',
       value: vehicles.filter(
         (v) =>
-          v.status === 'TERSEDIA'
+          v.status ===
+          'TERSEDIA'
       ).length,
       icon: CheckCircle2,
       tone: 'bg-emerald-700',
@@ -780,6 +1015,32 @@ function Dashboard() {
       0
     );
 
+  const fuelLogs =
+    daily.filter(
+      (log) =>
+        log.fuel_used_percentage !==
+          null &&
+        log.fuel_used_percentage !==
+          undefined
+    );
+
+  const totalFuelUsed =
+    fuelLogs.reduce(
+      (sum, log) =>
+        sum +
+        Number(
+          log.fuel_used_percentage ??
+            0
+        ),
+      0
+    );
+
+  const averageFuelUsed =
+    fuelLogs.length > 0
+      ? totalFuelUsed /
+        fuelLogs.length
+      : 0;
+
   return (
     <>
       <PageTitle
@@ -820,6 +1081,10 @@ function Dashboard() {
         )}
       </div>
 
+      {/* =====================================================
+          OPERATIONAL SUMMARY
+      ===================================================== */}
+
       <div className="mt-5 grid gap-5 xl:grid-cols-3">
         <div className="card p-6 xl:col-span-2">
           <div className="flex items-center justify-between">
@@ -841,7 +1106,7 @@ function Dashboard() {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-3">
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl bg-slate-50 p-4">
               <p className="text-xs text-slate-500">
                 Total KM hari ini
@@ -866,22 +1131,109 @@ function Dashboard() {
                 }
               </p>
             </div>
+
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-xs text-slate-500">
+                Rata-rata bensin
+              </p>
+
+              <p className="mt-1 text-xl font-black text-red-700">
+                {fuelLogs.length >
+                0
+                  ? `${fmtDecimal(
+                      averageFuelUsed
+                    )}%`
+                  : '-'}
+              </p>
+            </div>
           </div>
         </div>
 
+        {/* =====================================================
+            FUEL SUMMARY
+        ===================================================== */}
+
         <div className="card p-6">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-            Kendaraan dipantau
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Konsumsi bensin
+              </p>
+
+              <p className="mt-1 text-3xl font-black">
+                {fuelLogs.length > 0
+                  ? `${fmtDecimal(
+                      totalFuelUsed
+                    )}%`
+                  : '-'}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-red-50 p-3 text-red-700">
+              <Fuel size={20} />
+            </div>
+          </div>
+
+          <p className="mt-3 text-xs leading-5 text-slate-500">
+            Akumulasi persentase bensin
+            yang digunakan dari seluruh
+            perjalanan hari ini.
           </p>
 
-          <div className="mt-4 space-y-3">
-            {vehicles
-              .slice(0, 5)
-              .map((vehicle) => (
-                <div
-                  key={vehicle.id}
-                  className="flex items-center justify-between gap-3"
-                >
+          <div className="mt-5 h-3 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-red-600"
+              style={{
+                width: `${Math.min(
+                  100,
+                  Math.max(
+                    0,
+                    averageFuelUsed
+                  )
+                )}%`,
+              }}
+            />
+          </div>
+
+          <p className="mt-2 text-xs text-slate-400">
+            Rata-rata penggunaan:{' '}
+            <strong className="text-slate-700">
+              {fuelLogs.length > 0
+                ? `${fmtDecimal(
+                    averageFuelUsed
+                  )}% / perjalanan`
+                : '-'}
+            </strong>
+          </p>
+        </div>
+      </div>
+
+      {/* =====================================================
+          VEHICLES
+      ===================================================== */}
+
+      <div className="card mt-5 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Kendaraan dipantau
+            </p>
+
+            <p className="mt-1 text-sm text-slate-400">
+              Status kendaraan operasional
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {vehicles
+            .slice(0, 6)
+            .map((vehicle) => (
+              <div
+                key={vehicle.id}
+                className="rounded-xl border border-slate-100 p-4"
+              >
+                <div className="flex items-center justify-between gap-3">
                   <span className="truncate text-sm font-semibold">
                     {vehicle.name}
                   </span>
@@ -892,8 +1244,19 @@ function Dashboard() {
                     }
                   />
                 </div>
-              ))}
-          </div>
+
+                <p className="mt-3 text-xs text-slate-500">
+                  Odometer
+                </p>
+
+                <p className="font-black">
+                  {fmt(
+                    vehicle.current_km
+                  )}{' '}
+                  KM
+                </p>
+              </div>
+            ))}
         </div>
       </div>
     </>
@@ -948,7 +1311,6 @@ function Logs() {
   const [status, setStatus] =
     useState('');
 
-  // FILTER TANGGAL
   const [from, setFrom] =
     useState('');
 
@@ -956,74 +1318,67 @@ function Logs() {
     useState('');
 
   const filtered =
-    logs.filter((log) => {
-      // ==========================================
-      // TANGGAL LOG
-      // ==========================================
+    useMemo(() => {
+      return logs.filter(
+        (log) => {
+          const logDate =
+            log.exit_time?.slice(
+              0,
+              10
+            );
 
-      const logDate =
-        log.exit_time?.slice(0, 10);
+          const matchName =
+            !q ||
+            log.personnel_name
+              .toLowerCase()
+              .includes(
+                q.toLowerCase()
+              );
 
-      // ==========================================
-      // FILTER NAMA PERSONEL
-      // ==========================================
+          const matchVehicle =
+            !vehicle ||
+            log.vehicle_id ===
+              vehicle;
 
-      const matchName =
-        !q ||
-        log.personnel_name
-          .toLowerCase()
-          .includes(
-            q.toLowerCase()
+          const matchStatus =
+            !status ||
+            (status === 'SELESAI'
+              ? Boolean(
+                  log.entry_time
+                )
+              : !log.entry_time);
+
+          const matchFrom =
+            !from ||
+            Boolean(
+              logDate &&
+                logDate >= from
+            );
+
+          const matchTo =
+            !to ||
+            Boolean(
+              logDate &&
+                logDate <= to
+            );
+
+          return (
+            matchName &&
+            matchVehicle &&
+            matchStatus &&
+            matchFrom &&
+            matchTo
           );
-
-      // ==========================================
-      // FILTER KENDARAAN
-      // ==========================================
-
-      const matchVehicle =
-        !vehicle ||
-        log.vehicle_id === vehicle;
-
-      // ==========================================
-      // FILTER STATUS
-      // ==========================================
-
-      const matchStatus =
-        !status ||
-        (status === 'SELESAI'
-          ? Boolean(log.entry_time)
-          : !log.entry_time);
-
-      // ==========================================
-      // FILTER TANGGAL MULAI
-      // ==========================================
-
-      const matchFrom =
-        !from ||
-        (logDate &&
-          logDate >= from);
-
-      // ==========================================
-      // FILTER TANGGAL AKHIR
-      // ==========================================
-
-      const matchTo =
-        !to ||
-        (logDate &&
-          logDate <= to);
-
-      return (
-        matchName &&
-        matchVehicle &&
-        matchStatus &&
-        matchFrom &&
-        matchTo
+        }
       );
-    });
-
-  // ==========================================
-  // RESET FILTER
-  // ==========================================
+    }, [
+      logs,
+      q,
+      vehicle,
+      status,
+      from,
+      to,
+    ]);
 
   const resetFilters = () => {
     setQ('');
@@ -1041,15 +1396,12 @@ function Logs() {
         description="Menampilkan seluruh data aktivitas kendaraan secara lengkap."
       />
 
-      {/* =========================================
+      {/* =====================================================
           FILTER
-      ========================================= */}
+      ===================================================== */}
 
       <div className="card mb-5 p-4">
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-
-          {/* NAMA PERSONEL */}
-
           <div className="relative">
             <Search
               className="absolute left-3 top-3.5 text-slate-400"
@@ -1061,12 +1413,12 @@ function Logs() {
               placeholder="Cari nama personel"
               value={q}
               onChange={(e) =>
-                setQ(e.target.value)
+                setQ(
+                  e.target.value
+                )
               }
             />
           </div>
-
-          {/* TANGGAL MULAI */}
 
           <div>
             <label className="label">
@@ -1078,12 +1430,12 @@ function Logs() {
               type="date"
               value={from}
               onChange={(e) =>
-                setFrom(e.target.value)
+                setFrom(
+                  e.target.value
+                )
               }
             />
           </div>
-
-          {/* TANGGAL AKHIR */}
 
           <div>
             <label className="label">
@@ -1095,12 +1447,12 @@ function Logs() {
               type="date"
               value={to}
               onChange={(e) =>
-                setTo(e.target.value)
+                setTo(
+                  e.target.value
+                )
               }
             />
           </div>
-
-          {/* KENDARAAN */}
 
           <div>
             <label className="label">
@@ -1120,18 +1472,18 @@ function Logs() {
                 Semua kendaraan
               </option>
 
-              {vehicles.map((v) => (
-                <option
-                  key={v.id}
-                  value={v.id}
-                >
-                  {v.name}
-                </option>
-              ))}
+              {vehicles.map(
+                (v) => (
+                  <option
+                    key={v.id}
+                    value={v.id}
+                  >
+                    {v.name}
+                  </option>
+                )
+              )}
             </select>
           </div>
-
-          {/* STATUS */}
 
           <div>
             <label className="label">
@@ -1162,12 +1514,7 @@ function Logs() {
           </div>
         </div>
 
-        {/* =========================================
-            FILTER ACTION
-        ========================================= */}
-
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-
           <p className="text-xs text-slate-500">
             {from && to
               ? `Menampilkan aktivitas ${from} sampai ${to}`
@@ -1179,7 +1526,9 @@ function Logs() {
           </p>
 
           <button
-            onClick={resetFilters}
+            onClick={
+              resetFilters
+            }
             className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-100"
           >
             Reset Filter
@@ -1187,9 +1536,9 @@ function Logs() {
         </div>
       </div>
 
-      {/* =========================================
+      {/* =====================================================
           INFO
-      ========================================= */}
+      ===================================================== */}
 
       <div className="mb-4 flex items-center justify-between">
         <p className="text-sm text-slate-500">
@@ -1201,19 +1550,15 @@ function Logs() {
         </p>
       </div>
 
-      {/* =========================================
+      {/* =====================================================
           TABLE
-      ========================================= */}
+      ===================================================== */}
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-
-          <table className="w-full min-w-[2200px] text-left text-sm">
-
+          <table className="w-full min-w-[2450px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-
               <tr>
-
                 <th className="sticky left-0 z-10 bg-slate-50 px-5 py-4">
                   No
                 </th>
@@ -1259,6 +1604,18 @@ function Logs() {
                 </th>
 
                 <th className="px-5 py-4">
+                  Bensin Keluar
+                </th>
+
+                <th className="px-5 py-4">
+                  Bensin Masuk
+                </th>
+
+                <th className="px-5 py-4">
+                  Bensin Terpakai
+                </th>
+
+                <th className="px-5 py-4">
                   Kondisi Kendaraan
                 </th>
 
@@ -1273,124 +1630,78 @@ function Logs() {
                 <th className="px-5 py-4">
                   Bukti Odometer Masuk
                 </th>
-
               </tr>
-
             </thead>
 
             <tbody className="divide-y">
-
               {loading ? (
-
                 <tr>
-
                   <td
-                    colSpan={15}
+                    colSpan={18}
                     className="p-8 text-center text-slate-500"
                   >
                     Memuat data...
                   </td>
-
                 </tr>
-
-              ) : filtered.length === 0 ? (
-
+              ) : filtered.length ===
+                0 ? (
                 <tr>
-
                   <td
-                    colSpan={15}
+                    colSpan={18}
                     className="p-8 text-center text-slate-500"
                   >
-                    Belum ada log yang sesuai
-                    dengan filter.
+                    Belum ada log yang
+                    sesuai dengan
+                    filter.
                   </td>
-
                 </tr>
-
               ) : (
-
                 filtered.map(
                   (log, index) => (
-
                     <tr
                       key={log.id}
                       className="hover:bg-slate-50"
                     >
-
-                      {/* NO */}
-
                       <td className="sticky left-0 z-10 bg-white px-5 py-4 font-bold">
                         {index + 1}
                       </td>
 
-                      {/* TANGGAL */}
-
                       <td className="whitespace-nowrap px-5 py-4 text-slate-600">
-
-                        {log.exit_time
-                          ? new Intl.DateTimeFormat(
-                              'id-ID',
-                              {
-                                dateStyle:
-                                  'medium',
-                              }
-                            ).format(
-                              new Date(
-                                log.exit_time
-                              )
-                            )
-                          : '-'}
-
+                        {onlyDate(
+                          log.exit_time
+                        )}
                       </td>
 
-                      {/* PERSONEL */}
-
                       <td className="px-5 py-4">
-
                         <p className="whitespace-nowrap font-bold">
                           {
                             log.personnel_name
                           }
                         </p>
-
                       </td>
 
-                      {/* KENDARAAN */}
-
                       <td className="px-5 py-4">
-
                         <p className="whitespace-nowrap font-semibold">
                           {log.vehicle
                             ?.name ??
                             '-'}
                         </p>
-
                       </td>
 
-                      {/* TUJUAN */}
-
                       <td className="px-5 py-4">
-
                         <p className="max-w-[220px] font-semibold">
                           {
                             log.destination
                           }
                         </p>
-
                       </td>
 
-                      {/* KEPERLUAN */}
-
                       <td className="px-5 py-4">
-
                         <p className="max-w-[250px] text-slate-600">
                           {log.purpose ||
                             '-'}
                         </p>
-
                       </td>
-
-                      {/* JAM KELUAR */}
 
                       <td className="whitespace-nowrap px-5 py-4">
                         {date(
@@ -1398,15 +1709,11 @@ function Logs() {
                         )}
                       </td>
 
-                      {/* JAM MASUK */}
-
                       <td className="whitespace-nowrap px-5 py-4">
                         {date(
                           log.entry_time
                         )}
                       </td>
-
-                      {/* KM KELUAR */}
 
                       <td className="px-5 py-4 font-semibold">
                         {fmt(
@@ -1414,102 +1721,107 @@ function Logs() {
                         )}
                       </td>
 
-                      {/* KM MASUK */}
-
                       <td className="px-5 py-4 font-semibold">
                         {fmt(
                           log.km_entry
                         )}
                       </td>
 
-                      {/* TOTAL KM */}
-
                       <td className="px-5 py-4">
-
                         {log.total_distance ===
                         null ? (
-
                           <span className="text-slate-400">
                             Belum kembali
                           </span>
-
                         ) : (
-
                           <span className="font-bold text-emerald-700">
                             {fmt(
                               log.total_distance
                             )}{' '}
                             KM
                           </span>
-
                         )}
-
                       </td>
 
-                      {/* KONDISI */}
+                      {/* =================================================
+                          BENSIN KELUAR
+                      ================================================= */}
 
                       <td className="px-5 py-4">
+                        <FuelLevel
+                          value={
+                            log.fuel_exit_percentage
+                          }
+                        />
+                      </td>
 
+                      {/* =================================================
+                          BENSIN MASUK
+                      ================================================= */}
+
+                      <td className="px-5 py-4">
+                        <FuelLevel
+                          value={
+                            log.fuel_entry_percentage
+                          }
+                        />
+                      </td>
+
+                      {/* =================================================
+                          BENSIN TERPAKAI
+                      ================================================= */}
+
+                      <td className="px-5 py-4">
+                        <FuelBadge
+                          value={
+                            log.fuel_used_percentage
+                          }
+                        />
+                      </td>
+
+                      <td className="px-5 py-4">
                         <span className="whitespace-nowrap">
                           {log.vehicle_condition ||
                             '-'}
                         </span>
-
                       </td>
 
-                      {/* CATATAN */}
-
                       <td className="px-5 py-4">
-
                         <p className="max-w-[250px] whitespace-normal text-slate-600">
                           {log.notes ||
                             '-'}
                         </p>
-
                       </td>
 
-                      {/* FOTO ODOMETER KELUAR */}
-
                       <td className="px-5 py-4">
-
                         <PhotoLink
                           path={
                             log.exit_odometer_photo
                           }
                           label="Lihat Foto"
                         />
-
                       </td>
 
-                      {/* FOTO ODOMETER MASUK */}
-
                       <td className="px-5 py-4">
-
                         <PhotoLink
                           path={
                             log.entry_odometer_photo
                           }
                           label="Lihat Foto"
                         />
-
                       </td>
-
                     </tr>
-
                   )
                 )
-
               )}
-
             </tbody>
-
           </table>
-
         </div>
       </div>
     </>
   );
 }
+
 /* =========================================================
    VEHICLES
 ========================================================= */
@@ -1538,11 +1850,15 @@ function Vehicles() {
   ) => {
     event.preventDefault();
 
+    if (!name.trim()) {
+      return;
+    }
+
     if (editing?.id) {
       await supabase
         .from('vehicles')
         .update({
-          name,
+          name: name.trim(),
           status,
           active:
             status !==
@@ -1558,7 +1874,7 @@ function Vehicles() {
       await supabase
         .from('vehicles')
         .insert({
-          name,
+          name: name.trim(),
           status,
           active: true,
         });
@@ -1585,6 +1901,7 @@ function Vehicles() {
             setEditing(
               {} as Vehicle
             );
+
             setName('');
             setStatus(
               'TERSEDIA'
@@ -1630,9 +1947,11 @@ function Vehicles() {
                   setEditing(
                     vehicle
                   );
+
                   setName(
                     vehicle.name
                   );
+
                   setStatus(
                     vehicle.status
                   );
@@ -1705,6 +2024,7 @@ function Vehicles() {
                   (item) => (
                     <option
                       key={item}
+                      value={item}
                     >
                       {item}
                     </option>
@@ -1755,9 +2075,9 @@ function Reports() {
           );
 
         return (
-          logDate &&
-          logDate >= from &&
-          logDate <= to &&
+          Boolean(logDate) &&
+          logDate! >= from &&
+          logDate! <= to &&
           (!vehicle ||
             log.vehicle_id ===
               vehicle) &&
@@ -1771,6 +2091,42 @@ function Reports() {
       }
     );
 
+  const totalDistance =
+    filtered.reduce(
+      (sum, log) =>
+        sum +
+        Number(
+          log.total_distance ?? 0
+        ),
+      0
+    );
+
+  const fuelData =
+    filtered.filter(
+      (log) =>
+        log.fuel_used_percentage !==
+          null &&
+        log.fuel_used_percentage !==
+          undefined
+    );
+
+  const totalFuelUsed =
+    fuelData.reduce(
+      (sum, log) =>
+        sum +
+        Number(
+          log.fuel_used_percentage ??
+            0
+        ),
+      0
+    );
+
+  const averageFuelUsed =
+    fuelData.length > 0
+      ? totalFuelUsed /
+        fuelData.length
+      : 0;
+
   const exportFile = () => {
     const rows =
       filtered.map(
@@ -1778,11 +2134,13 @@ function Reports() {
           No: index + 1,
 
           Tanggal:
-            new Date(
-              log.exit_time
-            ).toLocaleDateString(
-              'id-ID'
-            ),
+            log.exit_time
+              ? new Date(
+                  log.exit_time
+                ).toLocaleDateString(
+                  'id-ID'
+                )
+              : '',
 
           'Nama Personel':
             log.personnel_name,
@@ -1816,6 +2174,15 @@ function Reports() {
 
           'Total KM':
             log.total_distance,
+
+          'Bensin Keluar (%)':
+            log.fuel_exit_percentage,
+
+          'Bensin Masuk (%)':
+            log.fuel_entry_percentage,
+
+          'Bensin Terpakai (%)':
+            log.fuel_used_percentage,
 
           'Kondisi Kendaraan':
             log.vehicle_condition ??
@@ -1946,6 +2313,77 @@ function Reports() {
         </label>
       </div>
 
+      {/* =====================================================
+          REPORT SUMMARY
+      ===================================================== */}
+
+      <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <div className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Total perjalanan
+              </p>
+
+              <p className="mt-1 text-2xl font-black">
+                {filtered.length}
+              </p>
+            </div>
+
+            <FileText
+              size={22}
+              className="text-slate-400"
+            />
+          </div>
+        </div>
+
+        <div className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Total jarak
+              </p>
+
+              <p className="mt-1 text-2xl font-black">
+                {fmt(
+                  totalDistance
+                )}{' '}
+                KM
+              </p>
+            </div>
+
+            <TrendingDown
+              size={22}
+              className="text-emerald-600"
+            />
+          </div>
+        </div>
+
+        <div className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Rata-rata bensin
+              </p>
+
+              <p className="mt-1 text-2xl font-black text-red-700">
+                {fuelData.length >
+                0
+                  ? `${fmtDecimal(
+                      averageFuelUsed
+                    )}%`
+                  : '-'}
+              </p>
+            </div>
+
+            <Fuel
+              size={22}
+              className="text-red-600"
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="mt-5 flex items-center justify-between">
         <p className="text-sm text-slate-500">
           Menampilkan{' '}
@@ -1956,7 +2394,9 @@ function Reports() {
         </p>
 
         <button
-          onClick={exportFile}
+          onClick={
+            exportFile
+          }
           className="flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-800"
         >
           <Download size={17} />
@@ -1964,9 +2404,13 @@ function Reports() {
         </button>
       </div>
 
+      {/* =====================================================
+          TABLE REPORT
+      ===================================================== */}
+
       <div className="card mt-5 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[800px] text-left text-sm">
+          <table className="w-full min-w-[1200px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
               <tr>
                 <th className="px-5 py-4">
@@ -1988,6 +2432,18 @@ function Reports() {
                 <th className="px-5 py-4">
                   Total KM
                 </th>
+
+                <th className="px-5 py-4">
+                  Bensin Keluar
+                </th>
+
+                <th className="px-5 py-4">
+                  Bensin Masuk
+                </th>
+
+                <th className="px-5 py-4">
+                  Bensin Terpakai
+                </th>
               </tr>
             </thead>
 
@@ -1996,9 +2452,10 @@ function Reports() {
                 (log) => (
                   <tr
                     key={log.id}
+                    className="hover:bg-slate-50"
                   >
                     <td className="px-5 py-4">
-                      {date(
+                      {onlyDate(
                         log.exit_time
                       )}
                     </td>
@@ -2030,8 +2487,48 @@ function Reports() {
                             log.total_distance
                           )} KM`}
                     </td>
+
+                    <td className="px-5 py-4">
+                      {log.fuel_exit_percentage ===
+                      null
+                        ? '-'
+                        : `${fmtDecimal(
+                            log.fuel_exit_percentage
+                          )}%`}
+                    </td>
+
+                    <td className="px-5 py-4">
+                      {log.fuel_entry_percentage ===
+                      null
+                        ? '-'
+                        : `${fmtDecimal(
+                            log.fuel_entry_percentage
+                          )}%`}
+                    </td>
+
+                    <td className="px-5 py-4">
+                      <FuelBadge
+                        value={
+                          log.fuel_used_percentage
+                        }
+                      />
+                    </td>
                   </tr>
                 )
+              )}
+
+              {filtered.length ===
+                0 && (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="p-8 text-center text-slate-500"
+                  >
+                    Tidak ada data
+                    untuk periode
+                    yang dipilih.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>

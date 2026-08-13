@@ -30,6 +30,9 @@ export type VehicleLog = {
   total_distance: number | null;
   exit_odometer_photo: string;
   entry_odometer_photo: string | null;
+  fuel_exit_percentage: number | null;
+  fuel_entry_percentage: number | null;
+  total_fuel_percentage: number | null;
   vehicle_condition: string;
   notes: string | null;
   vehicle?: Pick<Vehicle, 'name'>;

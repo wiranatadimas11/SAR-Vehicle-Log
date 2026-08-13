@@ -11,7 +11,7 @@ const initialForm: FormState = { personnel: '', vehicleId: '', destination: '', 
 
 function formatDate(value: string) { return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)); }
 function formatKm(value: number | string) { return new Intl.NumberFormat('id-ID').format(Number(value) || 0); }
-function uploadablePhoto(file: File | null) { return file && ['image/jpeg', 'image/png', 'image/webp'].includes(file.type) && file.size <= 5 * 1024 * 1024; }
+function uploadablePhoto(file: File | null) { return file && ['image/jpeg', 'image/png', 'image/webp'].includes(file.type) && file.size <= 10 * 1024 * 1024; // 10 MB; }
 
 export default function SarApp() {
   const [mode, setMode] = useState<Mode>('home');
@@ -45,7 +45,7 @@ export default function SarApp() {
 
   const updatePhoto = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
-    if (file && !uploadablePhoto(file)) { setError('Foto harus JPG, PNG, atau WEBP dan maksimal 5 MB.'); return; }
+    if (file && !uploadablePhoto(file)) { setError('Foto harus JPG, PNG, atau WEBP dan maksimal 10 MB.'); return; }
     setForm((current) => ({ ...current, photo: file })); setError(null);
   };
 

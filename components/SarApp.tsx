@@ -491,10 +491,6 @@ export default function SarApp() {
       return;
     }
 
-    /* =====================================================
-       VEHICLE AVAILABILITY CHECK
-    ===================================================== */
-
     if (
       vehicle.status !==
       'TERSEDIA'
@@ -575,10 +571,6 @@ export default function SarApp() {
         fuel_exit_percentage:
           fuelPercentage,
 
-        /*
-         * Saat kendaraan baru keluar,
-         * BBM terpakai belum diketahui.
-         */
         fuel_used_percentage:
           null,
 
@@ -653,7 +645,7 @@ export default function SarApp() {
     }
 
     setMessage(
-      'Data kendaraan keluar berhasil disimpan.'
+      'Data kendaraan keluar berhasil dicatat.'
     );
 
     setForm(initialForm);
@@ -767,16 +759,8 @@ export default function SarApp() {
       return;
     }
 
-    /* =====================================================
-       TOTAL JARAK
-    ===================================================== */
-
     const totalDistance =
       km - kmExit;
-
-    /* =====================================================
-       TOTAL FUEL PERCENTAGE
-    ===================================================== */
 
     const fuelUsed =
       calculateFuelUsed(
@@ -861,14 +845,6 @@ export default function SarApp() {
         fuel_entry_percentage:
           fuelPercentage,
 
-        /*
-         * TOTAL FUEL PERCENTAGE
-         *
-         * Contoh:
-         * BBM keluar = 80%
-         * BBM masuk  = 55%
-         * Fuel used  = 25%
-         */
         fuel_used_percentage:
           fuelUsed,
 
@@ -955,8 +931,8 @@ export default function SarApp() {
 
     setMessage(
       fuelUsed !== null
-        ? `Data kendaraan masuk berhasil disimpan. Total BBM terpakai ${fuelUsed}%.`
-        : 'Data kendaraan masuk berhasil disimpan.'
+        ? `Data kendaraan masuk berhasil dicatat. Total BBM terpakai ${fuelUsed}%.`
+        : 'Data kendaraan masuk berhasil dicatat.'
     );
 
     setMode('home');
@@ -976,7 +952,7 @@ export default function SarApp() {
     return (
       <FormShell
         title="Kendaraan Keluar"
-        subtitle="Catat keberangkatan kendaraan operasional."
+        subtitle="Catat keberangkatan kendaraan operasional Kantor SAR Tarakan."
         onBack={() =>
           setMode('home')
         }
@@ -1003,12 +979,12 @@ export default function SarApp() {
                     e.target.value,
                 })
               }
-              placeholder="Masukkan nama lengkap"
+              placeholder="Masukkan nama lengkap personel"
             />
           </Field>
 
           <Field
-            label="Kendaraan"
+            label="Kendaraan Operasional"
             icon={
               <CarFront size={17} />
             }
@@ -1027,7 +1003,7 @@ export default function SarApp() {
               }
             >
               <option value="">
-                Pilih kendaraan
+                Pilih kendaraan operasional
               </option>
 
               {available.map(
@@ -1052,8 +1028,8 @@ export default function SarApp() {
               0 && (
               <p className="mt-2 text-xs text-red-700">
                 Tidak ada kendaraan
-                yang tersedia saat
-                ini.
+                operasional yang
+                tersedia saat ini.
               </p>
             )}
           </Field>
@@ -1167,13 +1143,9 @@ export default function SarApp() {
                   km: e.target.value,
                 })
               }
-              placeholder="0"
+              placeholder="Masukkan angka odometer"
             />
           </Field>
-
-          {/* =================================================
-              BBM KELUAR
-          ================================================= */}
 
           <Field
             label="Persentase BBM Keluar"
@@ -1218,8 +1190,9 @@ export default function SarApp() {
             </div>
 
             <p className="mt-2 text-xs text-slate-500">
-              Isi perkiraan persentase BBM
-              saat kendaraan berangkat.
+              Isi perkiraan persentase
+              BBM saat kendaraan
+              berangkat.
             </p>
           </Field>
 
@@ -1282,11 +1255,11 @@ export default function SarApp() {
               saving ||
               available.length === 0
             }
-            className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-red-700 font-bold text-white shadow-lg shadow-red-700/20 transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 font-bold text-white shadow-lg shadow-orange-600/20 transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving
               ? 'Menyimpan...'
-              : 'Simpan Kendaraan Keluar'}
+              : 'Catat Kendaraan Keluar'}
 
             <ChevronRight
               size={18}
@@ -1305,7 +1278,7 @@ export default function SarApp() {
     return (
       <FormShell
         title="Kendaraan Masuk"
-        subtitle="Pilih kendaraan yang sedang digunakan untuk menyelesaikan log."
+        subtitle="Selesaikan pencatatan perjalanan kendaraan operasional."
         onBack={() =>
           setMode('home')
         }
@@ -1335,7 +1308,7 @@ export default function SarApp() {
                             vehicle
                           )
                         }
-                        className="card flex w-full items-center justify-between p-4 text-left transition hover:-translate-y-0.5 hover:border-red-200 hover:shadow-md"
+                        className="card flex w-full items-center justify-between p-4 text-left transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md"
                       >
                         <span>
                           <span className="block font-bold">
@@ -1351,7 +1324,7 @@ export default function SarApp() {
                         </span>
 
                         <ChevronRight
-                          className="text-red-700"
+                          className="text-orange-600"
                           size={19}
                         />
                       </button>
@@ -1368,13 +1341,10 @@ export default function SarApp() {
               className="space-y-5"
             >
 
-              {/* =================================================
-                  DETAIL KEBERANGKATAN
-              ================================================= */}
+              <div className="rounded-2xl border border-orange-100 bg-orange-50 p-5">
 
-              <div className="rounded-2xl border border-red-100 bg-red-50 p-5">
-                <p className="text-xs font-bold uppercase tracking-wider text-red-700">
-                  Detail keberangkatan
+                <p className="text-xs font-bold uppercase tracking-wider text-orange-700">
+                  Detail Keberangkatan
                 </p>
 
                 <h3 className="mt-2 text-lg font-bold">
@@ -1432,10 +1402,6 @@ export default function SarApp() {
                 </div>
               </div>
 
-              {/* =================================================
-                  KM MASUK
-              ================================================= */}
-
               <Field
                 label="KM / Odometer Masuk"
                 icon={
@@ -1482,10 +1448,6 @@ export default function SarApp() {
                   </div>
                 )}
 
-              {/* =================================================
-                  BBM MASUK
-              ================================================= */}
-
               <Field
                 label="Persentase BBM Masuk"
                 icon={
@@ -1529,13 +1491,10 @@ export default function SarApp() {
                 </div>
 
                 <p className="mt-2 text-xs text-slate-500">
-                  BBM saat kendaraan kembali.
+                  Isi persentase BBM
+                  saat kendaraan kembali.
                 </p>
               </Field>
-
-              {/* =================================================
-                  TOTAL FUEL PERCENTAGE
-              ================================================= */}
 
               {form.fuelPercentage &&
                 Number(
@@ -1544,22 +1503,22 @@ export default function SarApp() {
                   Number(
                     activeLog.fuel_exit_percentage
                   ) && (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                  <div className="rounded-2xl border border-orange-200 bg-orange-50 p-5">
 
                     <div className="flex items-start justify-between gap-4">
 
                       <div>
-                        <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
-                          Total Fuel Percentage
+                        <p className="text-xs font-bold uppercase tracking-wider text-orange-700">
+                          Rekap BBM Perjalanan
                         </p>
 
-                        <p className="mt-1 text-sm font-semibold text-amber-800">
+                        <p className="mt-1 text-sm font-semibold text-orange-800">
                           BBM terpakai selama perjalanan
                         </p>
                       </div>
 
                       <div className="text-right">
-                        <p className="text-3xl font-black text-amber-900">
+                        <p className="text-3xl font-black text-orange-900">
                           {formatFuel(
                             calculateFuelUsed(
                               activeLog.fuel_exit_percentage,
@@ -1574,7 +1533,7 @@ export default function SarApp() {
                     <div className="mt-4 grid grid-cols-2 gap-3">
 
                       <div className="rounded-xl bg-white/70 p-3">
-                        <p className="text-xs text-amber-700">
+                        <p className="text-xs text-orange-700">
                           BBM Keluar
                         </p>
 
@@ -1586,7 +1545,7 @@ export default function SarApp() {
                       </div>
 
                       <div className="rounded-xl bg-white/70 p-3">
-                        <p className="text-xs text-amber-700">
+                        <p className="text-xs text-orange-700">
                           BBM Masuk
                         </p>
 
@@ -1599,7 +1558,7 @@ export default function SarApp() {
 
                     </div>
 
-                    <div className="mt-3 rounded-xl bg-amber-100 px-4 py-3 text-xs font-semibold text-amber-800">
+                    <div className="mt-3 rounded-xl bg-orange-100 px-4 py-3 text-xs font-semibold text-orange-800">
                       {formatFuel(
                         activeLog.fuel_exit_percentage
                       )}{' '}
@@ -1620,19 +1579,11 @@ export default function SarApp() {
                   </div>
                 )}
 
-              {/* =================================================
-                  PHOTO
-              ================================================= */}
-
               <PhotoField
                 file={form.photo}
                 onChange={updatePhoto}
                 label="Foto Odometer Masuk"
               />
-
-              {/* =================================================
-                  CONDITION
-              ================================================= */}
 
               <Field label="Kondisi Kendaraan">
                 <select
@@ -1659,10 +1610,6 @@ export default function SarApp() {
                   )}
                 </select>
               </Field>
-
-              {/* =================================================
-                  NOTES
-              ================================================= */}
 
               <Field label="Catatan">
                 <textarea
@@ -1692,7 +1639,7 @@ export default function SarApp() {
               >
                 {saving
                   ? 'Menyimpan...'
-                  : 'Simpan Kendaraan Masuk'}
+                  : 'Catat Kendaraan Masuk'}
 
                 <CheckCircle2
                   size={18}
@@ -1711,134 +1658,185 @@ export default function SarApp() {
   ========================================================= */
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#fee2e2,_transparent_32%),linear-gradient(180deg,#f8fafc_0%,#eef2f6_100%)]">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#ffedd5,_transparent_32%),linear-gradient(180deg,#fff7ed_0%,#f8fafc_55%,#eef2f6_100%)]">
 
-      <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-5 py-6 sm:px-8">
+      <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-5 py-6 sm:px-8">
 
-        <header className="flex items-center justify-between">
+        {/* =================================================
+            HEADER
+        ================================================= */}
 
-          <div className="flex items-center gap-3">
+        <header className="flex items-center justify-between border-b border-orange-100 pb-5">
 
-            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-red-700 text-white shadow-lg shadow-red-700/20">
-              <CarFront size={22} />
+          <div className="flex items-center gap-4">
+
+            {/* LOGO BASARNAS */}
+
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white p-1 shadow-sm ring-1 ring-orange-100">
+              <img
+                src="/logo-basarnas.png"
+                alt="Logo BASARNAS"
+                className="h-full w-full object-contain"
+              />
             </div>
 
+            {/* TEXT BRAND */}
+
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-red-700">
-                SAR Operation
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-orange-600">
+                Badan Nasional Pencarian dan Pertolongan
               </p>
 
-              <h1 className="text-lg font-black tracking-tight">
-                SAR Vehicle Log
+              <h1 className="text-base font-black tracking-tight text-slate-900 sm:text-lg">
+                Kantor Pencarian dan Pertolongan Tarakan
               </h1>
+
+              <p className="mt-0.5 text-xs font-medium text-slate-500">
+                Sistem Pencatatan Kendaraan Operasional
+              </p>
             </div>
 
           </div>
 
+          {/* ADMIN */}
+
           <a
             href="/admin/login"
-            className="rounded-xl p-2 text-slate-400 transition hover:bg-white hover:text-red-700"
+            className="rounded-xl p-2.5 text-slate-400 transition hover:bg-white hover:text-orange-600"
             aria-label="Admin"
           >
             <ShieldCheck
-              size={20}
+              size={21}
             />
           </a>
 
         </header>
 
-        <section className="flex flex-1 flex-col justify-center py-16">
+        {/* =================================================
+            HERO
+        ================================================= */}
 
-          <div className="mx-auto w-full max-w-2xl text-center">
+        <section className="flex flex-1 flex-col justify-center py-14">
 
-            <p className="mb-3 text-sm font-semibold text-slate-500">
-              Pencatatan Kendaraan
-              SAR
-            </p>
+          <div className="mx-auto w-full max-w-3xl">
 
-            <h2 className="text-4xl font-black tracking-tight text-slate-900 sm:text-6xl">
-              Mobilitas aman,
-              <br />
-              <span className="text-red-700">
-                operasi terpantau.
-              </span>
-            </h2>
+            <div className="mb-8 flex flex-col items-center text-center">
 
-            <p className="mx-auto mt-5 max-w-md text-sm leading-6 text-slate-500">
-              Catat pergerakan
-              kendaraan operasional
-              dengan cepat dan rapi.
-              Pilih kendaraan secara
-              manual setelah membuka
-              halaman ini.
-            </p>
+              {/* LOGO SAR NASIONAL */}
 
-            <div className="mt-10 grid gap-4 sm:grid-cols-2">
+              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-white p-2 shadow-md ring-1 ring-orange-100">
+                <img
+                  src="/logo-sar-nasional.png"
+                  alt="Logo SAR Nasional"
+                  className="h-full w-full object-contain"
+                />
+              </div>
+
+              <p className="mb-3 inline-flex items-center rounded-full bg-orange-100 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-orange-700">
+                Sistem Internal Operasional
+              </p>
+
+              <h2 className="text-4xl font-black tracking-tight text-slate-900 sm:text-5xl">
+                Pencatatan Kendaraan
+                <br />
+
+                <span className="text-orange-600">
+                  Kantor SAR Tarakan
+                </span>
+              </h2>
+
+              <p className="mx-auto mt-5 max-w-xl text-sm leading-6 text-slate-500">
+                Sistem digital untuk mencatat
+                pergerakan kendaraan operasional,
+                odometer, kondisi kendaraan,
+                penggunaan BBM, serta perjalanan
+                personel secara cepat dan terstruktur.
+              </p>
+
+            </div>
+
+            {/* =================================================
+                ACTION CARDS
+            ================================================= */}
+
+            <div className="grid gap-5 sm:grid-cols-2">
+
+              {/* KENDARAAN KELUAR */}
 
               <button
                 onClick={() =>
                   void begin('exit')
                 }
-                className="group relative flex min-h-40 flex-col items-start justify-between rounded-3xl bg-red-700 p-6 text-left text-white shadow-xl shadow-red-700/20 transition hover:-translate-y-1 hover:bg-red-800"
+                className="group relative flex min-h-48 flex-col items-start justify-between overflow-hidden rounded-3xl bg-orange-600 p-7 text-left text-white shadow-xl shadow-orange-600/20 transition duration-300 hover:-translate-y-1 hover:bg-orange-700"
               >
 
-                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/15">
-                  <LogOut size={22} />
+                <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+
+                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/15 backdrop-blur">
+                  <LogOut size={23} />
                 </span>
 
-                <span>
+                <span className="relative">
                   <span className="block text-xl font-black">
-                    Kendaraan
-                    Keluar
+                    Kendaraan Keluar
                   </span>
 
-                  <span className="mt-1 block text-sm text-red-100">
-                    Catat keberangkatan
-                    kendaraan
+                  <span className="mt-1 block text-sm text-orange-100">
+                    Catat keberangkatan kendaraan
                   </span>
                 </span>
 
-                <ChevronRight
-                  className="absolute right-6 bottom-6 transition group-hover:translate-x-1"
-                  size={20}
-                />
+                <span className="absolute bottom-7 right-7 grid h-9 w-9 place-items-center rounded-full bg-white/10">
+                  <ChevronRight
+                    size={19}
+                    className="transition group-hover:translate-x-1"
+                  />
+                </span>
 
               </button>
+
+              {/* KENDARAAN MASUK */}
 
               <button
                 onClick={() =>
                   void begin('entry')
                 }
-                className="group relative flex min-h-40 flex-col items-start justify-between rounded-3xl bg-slate-900 p-6 text-left text-white shadow-xl shadow-slate-900/15 transition hover:-translate-y-1 hover:bg-slate-800"
+                className="group relative flex min-h-48 flex-col items-start justify-between overflow-hidden rounded-3xl bg-slate-900 p-7 text-left text-white shadow-xl shadow-slate-900/15 transition duration-300 hover:-translate-y-1 hover:bg-slate-800"
               >
 
-                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10">
-                  <LogIn size={22} />
+                <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-orange-500/10" />
+
+                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10">
+                  <LogIn size={23} />
                 </span>
 
-                <span>
+                <span className="relative">
                   <span className="block text-xl font-black">
-                    Kendaraan
-                    Masuk
+                    Kendaraan Masuk
                   </span>
 
                   <span className="mt-1 block text-sm text-slate-300">
-                    Selesaikan catatan
-                    perjalanan
+                    Selesaikan catatan perjalanan
                   </span>
                 </span>
 
-                <ChevronRight
-                  className="absolute right-6 bottom-6 transition group-hover:translate-x-1"
-                  size={20}
-                />
+                <span className="absolute bottom-7 right-7 grid h-9 w-9 place-items-center rounded-full bg-white/10">
+                  <ChevronRight
+                    size={19}
+                    className="transition group-hover:translate-x-1"
+                  />
+                </span>
 
               </button>
 
             </div>
 
+            {/* =================================================
+                STATUS MESSAGE
+            ================================================= */}
+
             {message && (
-              <div className="mx-auto mt-6 max-w-lg rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-left text-emerald-800">
+              <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-left text-emerald-800">
 
                 <div className="flex gap-3">
 
@@ -1854,9 +1852,9 @@ export default function SarApp() {
                     </p>
 
                     <p className="mt-1 text-sm">
-                      Data perjalanan
-                      sudah masuk ke
-                      sistem monitoring.
+                      Data perjalanan telah
+                      masuk ke sistem monitoring
+                      Kantor SAR Tarakan.
                     </p>
 
                   </div>
@@ -1867,7 +1865,7 @@ export default function SarApp() {
             )}
 
             {error && (
-              <div className="mx-auto mt-6 max-w-lg rounded-2xl border border-red-200 bg-red-50 p-5 text-left text-red-800">
+              <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-red-200 bg-red-50 p-5 text-left text-red-800">
                 {error}
               </div>
             )}
@@ -1876,18 +1874,28 @@ export default function SarApp() {
 
         </section>
 
-        <footer className="flex items-center justify-between border-t border-slate-200/70 pt-5 text-xs text-slate-400">
+        {/* =================================================
+            FOOTER
+        ================================================= */}
 
-          <span>
-            Internal Operations
-            System
-          </span>
+        <footer className="flex flex-col gap-3 border-t border-orange-100 pt-5 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+
+          <div>
+            <p className="font-semibold text-slate-500">
+              Kantor Pencarian dan Pertolongan Tarakan
+            </p>
+
+            <p className="mt-0.5">
+              Badan Nasional Pencarian dan Pertolongan
+            </p>
+          </div>
 
           <span className="flex items-center gap-1">
             <ShieldCheck
               size={13}
             />
-            Secure field logging
+
+            Sistem Internal Operasional
           </span>
 
         </footer>
@@ -1914,31 +1922,44 @@ function FormShell({
   children: React.ReactNode;
 }) {
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#fff7ed_0%,#f8fafc_45%,#f1f5f9_100%)]">
 
       <div className="mx-auto max-w-2xl px-5 py-6 sm:px-8">
 
-        <button
-          onClick={onBack}
-          className="mb-8 flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-red-700"
-        >
-          <ArrowLeft
-            size={17}
-          />
-          Kembali
-        </button>
+        <div className="mb-8 flex items-center justify-between">
+
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-orange-600"
+          >
+            <ArrowLeft
+              size={17}
+            />
+
+            Kembali
+          </button>
+
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white p-1 shadow-sm ring-1 ring-orange-100">
+            <img
+              src="/logo-basarnas.png"
+              alt="BASARNAS"
+              className="h-full w-full object-contain"
+            />
+          </div>
+
+        </div>
 
         <div className="mb-8">
 
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-700">
-            SAR Vehicle Log
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-600">
+            Sistem Kendaraan Operasional
           </p>
 
-          <h1 className="mt-2 text-3xl font-black tracking-tight">
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
             {title}
           </h1>
 
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm leading-6 text-slate-500">
             {subtitle}
           </p>
 
@@ -1946,6 +1967,15 @@ function FormShell({
 
         <div className="card p-5 sm:p-8">
           {children}
+        </div>
+
+        <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400">
+          <ShieldCheck
+            size={14}
+          />
+
+          Data digunakan untuk keperluan
+          operasional internal Kantor SAR Tarakan.
         </div>
 
       </div>
@@ -2005,15 +2035,15 @@ function PhotoField({
 
         {label}
 
-        <span className="text-red-700">
+        <span className="text-orange-600">
           *
         </span>
 
       </span>
 
-      <label className="flex cursor-pointer items-center gap-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 transition hover:border-red-300 hover:bg-red-50/40">
+      <label className="flex cursor-pointer items-center gap-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 transition hover:border-orange-300 hover:bg-orange-50/40">
 
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white text-red-700 shadow-sm">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white text-orange-600 shadow-sm">
 
           {file ? (
             <CheckCircle2
@@ -2096,7 +2126,7 @@ function Info({
   return (
     <div>
 
-      <p className="text-xs text-red-700/70">
+      <p className="text-xs text-orange-700/70">
         {label}
       </p>
 

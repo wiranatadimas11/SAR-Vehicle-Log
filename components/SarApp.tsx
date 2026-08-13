@@ -659,290 +659,319 @@ export default function SarApp() {
      SAVE VEHICLE ENTRY
   ======================================================= */
 
-  const saveEntry = async (
-    event: FormEvent
-  ) => {
-    event.preventDefault();
+  /* =======================================================
+   SAVE VEHICLE ENTRY
+======================================================= */
 
-    setError(null);
-    setMessage(null);
+const saveEntry = async (
+  event: FormEvent
+) => {
+  event.preventDefault();
 
-    if (!activeLog) {
-      setError(
-        'Data perjalanan kendaraan tidak ditemukan.'
+  setError(null);
+  setMessage(null);
+
+  if (!activeLog) {
+    setError(
+      'Data perjalanan kendaraan tidak ditemukan.'
+    );
+
+    return;
+  }
+
+  if (
+    !form.photo ||
+    !uploadablePhoto(form.photo)
+  ) {
+    setError(
+      'Foto odometer masuk wajib diunggah dan maksimal 10 MB.'
+    );
+
+    return;
+  }
+
+  if (!form.km) {
+    setError(
+      'Isi KM odometer masuk terlebih dahulu.'
+    );
+
+    return;
+  }
+
+  if (!form.fuelPercentage) {
+    setError(
+      'Isi persentase BBM masuk terlebih dahulu.'
+    );
+
+    return;
+  }
+
+  const km = Number(form.km);
+
+  if (
+    !Number.isFinite(km) ||
+    km < 0
+  ) {
+    setError(
+      'KM odometer masuk tidak valid.'
+    );
+
+    return;
+  }
+
+  const kmExit =
+    Number(activeLog.km_exit);
+
+  if (
+    !Number.isFinite(kmExit)
+  ) {
+    setError(
+      'KM odometer keluar tidak valid.'
+    );
+
+    return;
+  }
+
+  if (km < kmExit) {
+    setError(
+      'KM odometer masuk tidak boleh lebih kecil dari KM odometer keluar.'
+    );
+
+    return;
+  }
+
+  const fuelPercentage =
+    Number(form.fuelPercentage);
+
+  if (
+    !Number.isFinite(
+      fuelPercentage
+    ) ||
+    fuelPercentage < 0 ||
+    fuelPercentage > 100
+  ) {
+    setError(
+      'Persentase BBM harus antara 0% sampai 100%.'
+    );
+
+    return;
+  }
+
+  const fuelExit =
+    Number(
+      activeLog.fuel_exit_percentage
+    );
+
+  if (
+    Number.isFinite(fuelExit) &&
+    fuelPercentage > fuelExit
+  ) {
+    setError(
+      'Persentase BBM masuk tidak boleh lebih besar dari BBM keluar.'
+    );
+
+    return;
+  }
+
+  /* =====================================================
+     HITUNG BBM TERPAKAI
+     
+     total_distance TIDAK dihitung untuk dikirim
+     ke database karena merupakan GENERATED COLUMN.
+  ===================================================== */
+
+  const fuelUsed =
+    calculateFuelUsed(
+      activeLog.fuel_exit_percentage,
+      fuelPercentage
+    );
+
+  setSaving(true);
+
+  const vehicle =
+    vehicles.find(
+      (item) =>
+        item.id ===
+        activeLog.vehicle_id
+    );
+
+  if (!vehicle) {
+    setSaving(false);
+
+    setError(
+      'Data kendaraan tidak ditemukan.'
+    );
+
+    return;
+  }
+
+  /* =====================================================
+     UPLOAD FOTO
+  ===================================================== */
+
+  const extension =
+    getPhotoExtension(
+      form.photo
+    );
+
+  const path =
+    `masuk/${activeLog.vehicle_id}-${Date.now()}.${extension}`;
+
+  const upload =
+    await supabase.storage
+      .from('vehicle-odometer')
+      .upload(
+        path,
+        form.photo,
+        {
+          contentType:
+            form.photo.type,
+          upsert: false,
+        }
       );
 
-      return;
-    }
+  if (upload.error) {
+    console.error(
+      'PHOTO ENTRY UPLOAD ERROR:',
+      upload.error
+    );
 
-    if (
-      !form.photo ||
-      !uploadablePhoto(form.photo)
-    ) {
-      setError(
-        'Foto odometer masuk wajib diunggah dan maksimal 10 MB.'
-      );
-
-      return;
-    }
-
-    if (!form.km) {
-      setError(
-        'Isi KM odometer masuk terlebih dahulu.'
-      );
-
-      return;
-    }
-
-    if (!form.fuelPercentage) {
-      setError(
-        'Isi persentase BBM masuk terlebih dahulu.'
-      );
-
-      return;
-    }
-
-    const km = Number(form.km);
-
-    if (
-      !Number.isFinite(km) ||
-      km < 0
-    ) {
-      setError(
-        'KM odometer masuk tidak valid.'
-      );
-
-      return;
-    }
-
-    const kmExit =
-      Number(activeLog.km_exit);
-
-    if (km < kmExit) {
-      setError(
-        'KM odometer masuk tidak boleh lebih kecil dari KM odometer keluar.'
-      );
-
-      return;
-    }
-
-    const fuelPercentage =
-      Number(form.fuelPercentage);
-
-    if (
-      !Number.isFinite(
-        fuelPercentage
-      ) ||
-      fuelPercentage < 0 ||
-      fuelPercentage > 100
-    ) {
-      setError(
-        'Persentase BBM harus antara 0% sampai 100%.'
-      );
-
-      return;
-    }
-
-    const fuelExit =
-      Number(
-        activeLog.fuel_exit_percentage
-      );
-
-    if (
-      Number.isFinite(fuelExit) &&
-      fuelPercentage > fuelExit
-    ) {
-      setError(
-        'Persentase BBM masuk tidak boleh lebih besar dari BBM keluar.'
-      );
-
-      return;
-    }
-
-    const totalDistance =
-      km - kmExit;
-
-    const fuelUsed =
-      calculateFuelUsed(
-        activeLog.fuel_exit_percentage,
-        fuelPercentage
-      );
-
-    setSaving(true);
-
-    const vehicle =
-      vehicles.find(
-        (item) =>
-          item.id ===
-          activeLog.vehicle_id
-      );
-
-    if (!vehicle) {
-      setSaving(false);
-
-      setError(
-        'Data kendaraan tidak ditemukan.'
-      );
-
-      return;
-    }
-
-    /* =====================================================
-       UPLOAD FOTO
-    ===================================================== */
-
-    const extension =
-      getPhotoExtension(
-        form.photo
-      );
-
-    const path =
-      `masuk/${activeLog.vehicle_id}-${Date.now()}.${extension}`;
-
-    const upload =
-      await supabase.storage
-        .from('vehicle-odometer')
-        .upload(
-          path,
-          form.photo,
-          {
-            contentType:
-              form.photo.type,
-            upsert: false,
-          }
-        );
-
-    if (upload.error) {
-      console.error(
-        'PHOTO ENTRY UPLOAD ERROR:',
-        upload.error
-      );
-
-      setError(
-        `Foto belum dapat disimpan: ${upload.error.message}`
-      );
-
-      setSaving(false);
-
-      return;
-    }
-
-    /* =====================================================
-       UPDATE LOG
-    ===================================================== */
-
-    const {
-      error: logError,
-    } = await supabase
-      .from('vehicle_logs')
-      .update({
-        entry_time:
-          new Date().toISOString(),
-
-        km_entry:
-          km,
-
-        fuel_entry_percentage:
-          fuelPercentage,
-
-        fuel_used_percentage:
-          fuelUsed,
-
-        total_distance:
-          totalDistance,
-
-        entry_odometer_photo:
-          path,
-
-        vehicle_condition:
-          form.condition,
-
-        notes:
-          form.notes.trim() ||
-          activeLog.notes ||
-          null,
-
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        'id',
-        activeLog.id
-      );
-
-    if (logError) {
-      console.error(
-        'UPDATE LOG ERROR:',
-        logError
-      );
-
-      await supabase.storage
-        .from('vehicle-odometer')
-        .remove([path]);
-
-      setError(
-        `Data kendaraan masuk belum dapat disimpan: ${logError.message}`
-      );
-
-      setSaving(false);
-
-      return;
-    }
-
-    /* =====================================================
-       UPDATE VEHICLE
-    ===================================================== */
-
-    const {
-      error: vehicleError,
-    } = await supabase
-      .from('vehicles')
-      .update({
-        status:
-          'TERSEDIA',
-
-        current_km:
-          km,
-
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        'id',
-        vehicle.id
-      );
+    setError(
+      `Foto belum dapat disimpan: ${upload.error.message}`
+    );
 
     setSaving(false);
 
-    if (vehicleError) {
-      console.error(
-        'VEHICLE ENTRY UPDATE ERROR:',
-        vehicleError
-      );
+    return;
+  }
 
-      setError(
-        'Log kendaraan masuk berhasil, tetapi status kendaraan belum berubah.'
-      );
+  /* =====================================================
+     UPDATE LOG
 
-      await loadVehicles();
+     PENTING:
+     Jangan mengirim total_distance karena
+     total_distance adalah GENERATED COLUMN.
+     
+     Database akan otomatis menghitung:
+     
+     km_entry - km_exit
+     
+     setelah km_entry disimpan.
+  ===================================================== */
 
-      return;
-    }
+  const {
+    error: logError,
+  } = await supabase
+    .from('vehicle_logs')
+    .update({
+      entry_time:
+        new Date().toISOString(),
 
-    setMessage(
-      fuelUsed !== null
-        ? `Data kendaraan masuk berhasil dicatat. Total BBM terpakai ${fuelUsed}%.`
-        : 'Data kendaraan masuk berhasil dicatat.'
+      km_entry:
+        km,
+
+      fuel_entry_percentage:
+        fuelPercentage,
+
+      fuel_used_percentage:
+        fuelUsed,
+
+      entry_odometer_photo:
+        path,
+
+      vehicle_condition:
+        form.condition,
+
+      notes:
+        form.notes.trim() ||
+        activeLog.notes ||
+        null,
+
+      updated_at:
+        new Date().toISOString(),
+    })
+    .eq(
+      'id',
+      activeLog.id
     );
 
-    setMode('home');
+  if (logError) {
+    console.error(
+      'UPDATE LOG ERROR:',
+      logError
+    );
 
-    setActiveLog(null);
+    await supabase.storage
+      .from('vehicle-odometer')
+      .remove([path]);
 
-    setForm(initialForm);
+    setError(
+      `Data kendaraan masuk belum dapat disimpan: ${logError.message}`
+    );
+
+    setSaving(false);
+
+    return;
+  }
+
+  /* =====================================================
+     UPDATE VEHICLE
+  ===================================================== */
+
+  const {
+    error: vehicleError,
+  } = await supabase
+    .from('vehicles')
+    .update({
+      status:
+        'TERSEDIA',
+
+      current_km:
+        km,
+
+      updated_at:
+        new Date().toISOString(),
+    })
+    .eq(
+      'id',
+      vehicle.id
+    );
+
+  setSaving(false);
+
+  if (vehicleError) {
+    console.error(
+      'VEHICLE ENTRY UPDATE ERROR:',
+      vehicleError
+    );
+
+    setError(
+      'Log kendaraan masuk berhasil, tetapi status kendaraan belum berubah.'
+    );
 
     await loadVehicles();
-  };
+
+    return;
+  }
+
+  /* =====================================================
+     SUCCESS
+  ===================================================== */
+
+  setMessage(
+    fuelUsed !== null
+      ? `Data kendaraan masuk berhasil dicatat. Total BBM terpakai ${fuelUsed}%.`
+      : 'Data kendaraan masuk berhasil dicatat.'
+  );
+
+  setMode('home');
+
+  setActiveLog(null);
+
+  setForm(initialForm);
+
+  await loadVehicles();
+};
 
   /* =========================================================
      VEHICLE EXIT PAGE

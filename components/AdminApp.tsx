@@ -948,25 +948,90 @@ function Logs() {
   const [status, setStatus] =
     useState('');
 
+  // FILTER TANGGAL
+  const [from, setFrom] =
+    useState('');
+
+  const [to, setTo] =
+    useState('');
+
   const filtered =
-    logs.filter(
-      (log) =>
-        (!q ||
-          log.personnel_name
-            .toLowerCase()
-            .includes(
-              q.toLowerCase()
-            )) &&
-        (!vehicle ||
-          log.vehicle_id ===
-            vehicle) &&
-        (!status ||
-          (status === 'SELESAI'
-            ? Boolean(
-                log.entry_time
-              )
-            : !log.entry_time))
-    );
+    logs.filter((log) => {
+      // ==========================================
+      // TANGGAL LOG
+      // ==========================================
+
+      const logDate =
+        log.exit_time?.slice(0, 10);
+
+      // ==========================================
+      // FILTER NAMA PERSONEL
+      // ==========================================
+
+      const matchName =
+        !q ||
+        log.personnel_name
+          .toLowerCase()
+          .includes(
+            q.toLowerCase()
+          );
+
+      // ==========================================
+      // FILTER KENDARAAN
+      // ==========================================
+
+      const matchVehicle =
+        !vehicle ||
+        log.vehicle_id === vehicle;
+
+      // ==========================================
+      // FILTER STATUS
+      // ==========================================
+
+      const matchStatus =
+        !status ||
+        (status === 'SELESAI'
+          ? Boolean(log.entry_time)
+          : !log.entry_time);
+
+      // ==========================================
+      // FILTER TANGGAL MULAI
+      // ==========================================
+
+      const matchFrom =
+        !from ||
+        (logDate &&
+          logDate >= from);
+
+      // ==========================================
+      // FILTER TANGGAL AKHIR
+      // ==========================================
+
+      const matchTo =
+        !to ||
+        (logDate &&
+          logDate <= to);
+
+      return (
+        matchName &&
+        matchVehicle &&
+        matchStatus &&
+        matchFrom &&
+        matchTo
+      );
+    });
+
+  // ==========================================
+  // RESET FILTER
+  // ==========================================
+
+  const resetFilters = () => {
+    setQ('');
+    setVehicle('');
+    setStatus('');
+    setFrom('');
+    setTo('');
+  };
 
   return (
     <>
@@ -976,72 +1041,155 @@ function Logs() {
         description="Menampilkan seluruh data aktivitas kendaraan secara lengkap."
       />
 
-      {/* FILTER */}
+      {/* =========================================
+          FILTER
+      ========================================= */}
 
-      <div className="card mb-5 grid gap-3 p-4 md:grid-cols-3">
-        <div className="relative">
-          <Search
-            className="absolute left-3 top-3.5 text-slate-400"
-            size={17}
-          />
+      <div className="card mb-5 p-4">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
 
-          <input
-            className="field pl-10"
-            placeholder="Cari nama personel"
-            value={q}
-            onChange={(e) =>
-              setQ(e.target.value)
-            }
-          />
+          {/* NAMA PERSONEL */}
+
+          <div className="relative">
+            <Search
+              className="absolute left-3 top-3.5 text-slate-400"
+              size={17}
+            />
+
+            <input
+              className="field pl-10"
+              placeholder="Cari nama personel"
+              value={q}
+              onChange={(e) =>
+                setQ(e.target.value)
+              }
+            />
+          </div>
+
+          {/* TANGGAL MULAI */}
+
+          <div>
+            <label className="label">
+              Tanggal mulai
+            </label>
+
+            <input
+              className="field"
+              type="date"
+              value={from}
+              onChange={(e) =>
+                setFrom(e.target.value)
+              }
+            />
+          </div>
+
+          {/* TANGGAL AKHIR */}
+
+          <div>
+            <label className="label">
+              Tanggal akhir
+            </label>
+
+            <input
+              className="field"
+              type="date"
+              value={to}
+              onChange={(e) =>
+                setTo(e.target.value)
+              }
+            />
+          </div>
+
+          {/* KENDARAAN */}
+
+          <div>
+            <label className="label">
+              Kendaraan
+            </label>
+
+            <select
+              className="field"
+              value={vehicle}
+              onChange={(e) =>
+                setVehicle(
+                  e.target.value
+                )
+              }
+            >
+              <option value="">
+                Semua kendaraan
+              </option>
+
+              {vehicles.map((v) => (
+                <option
+                  key={v.id}
+                  value={v.id}
+                >
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* STATUS */}
+
+          <div>
+            <label className="label">
+              Status
+            </label>
+
+            <select
+              className="field"
+              value={status}
+              onChange={(e) =>
+                setStatus(
+                  e.target.value
+                )
+              }
+            >
+              <option value="">
+                Semua status
+              </option>
+
+              <option value="SELESAI">
+                Selesai
+              </option>
+
+              <option value="AKTIF">
+                Sedang digunakan
+              </option>
+            </select>
+          </div>
         </div>
 
-        <select
-          className="field"
-          value={vehicle}
-          onChange={(e) =>
-            setVehicle(
-              e.target.value
-            )
-          }
-        >
-          <option value="">
-            Semua kendaraan
-          </option>
+        {/* =========================================
+            FILTER ACTION
+        ========================================= */}
 
-          {vehicles.map((v) => (
-            <option
-              key={v.id}
-              value={v.id}
-            >
-              {v.name}
-            </option>
-          ))}
-        </select>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
 
-        <select
-          className="field"
-          value={status}
-          onChange={(e) =>
-            setStatus(
-              e.target.value
-            )
-          }
-        >
-          <option value="">
-            Semua status
-          </option>
+          <p className="text-xs text-slate-500">
+            {from && to
+              ? `Menampilkan aktivitas ${from} sampai ${to}`
+              : from
+              ? `Menampilkan aktivitas mulai ${from}`
+              : to
+              ? `Menampilkan aktivitas sampai ${to}`
+              : 'Menampilkan seluruh periode aktivitas'}
+          </p>
 
-          <option value="SELESAI">
-            Selesai
-          </option>
-
-          <option value="AKTIF">
-            Sedang digunakan
-          </option>
-        </select>
+          <button
+            onClick={resetFilters}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-100"
+          >
+            Reset Filter
+          </button>
+        </div>
       </div>
 
-      {/* INFO */}
+      {/* =========================================
+          INFO
+      ========================================= */}
 
       <div className="mb-4 flex items-center justify-between">
         <p className="text-sm text-slate-500">
@@ -1053,13 +1201,19 @@ function Logs() {
         </p>
       </div>
 
-      {/* TABLE */}
+      {/* =========================================
+          TABLE
+      ========================================= */}
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
+
           <table className="w-full min-w-[2200px] text-left text-sm">
+
             <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+
               <tr>
+
                 <th className="sticky left-0 z-10 bg-slate-50 px-5 py-4">
                   No
                 </th>
@@ -1119,40 +1273,50 @@ function Logs() {
                 <th className="px-5 py-4">
                   Bukti Odometer Masuk
                 </th>
+
               </tr>
+
             </thead>
 
             <tbody className="divide-y">
+
               {loading ? (
+
                 <tr>
+
                   <td
                     colSpan={15}
                     className="p-8 text-center text-slate-500"
                   >
                     Memuat data...
                   </td>
+
                 </tr>
-              ) : filtered.length ===
-                0 ? (
+
+              ) : filtered.length === 0 ? (
+
                 <tr>
+
                   <td
                     colSpan={15}
                     className="p-8 text-center text-slate-500"
                   >
                     Belum ada log yang sesuai
-                    filter.
+                    dengan filter.
                   </td>
+
                 </tr>
+
               ) : (
+
                 filtered.map(
-                  (
-                    log,
-                    index
-                  ) => (
+                  (log, index) => (
+
                     <tr
                       key={log.id}
                       className="hover:bg-slate-50"
                     >
+
                       {/* NO */}
 
                       <td className="sticky left-0 z-10 bg-white px-5 py-4 font-bold">
@@ -1162,6 +1326,7 @@ function Logs() {
                       {/* TANGGAL */}
 
                       <td className="whitespace-nowrap px-5 py-4 text-slate-600">
+
                         {log.exit_time
                           ? new Intl.DateTimeFormat(
                               'id-ID',
@@ -1175,45 +1340,54 @@ function Logs() {
                               )
                             )
                           : '-'}
+
                       </td>
 
                       {/* PERSONEL */}
 
                       <td className="px-5 py-4">
+
                         <p className="whitespace-nowrap font-bold">
                           {
                             log.personnel_name
                           }
                         </p>
+
                       </td>
 
                       {/* KENDARAAN */}
 
                       <td className="px-5 py-4">
+
                         <p className="whitespace-nowrap font-semibold">
                           {log.vehicle
                             ?.name ??
                             '-'}
                         </p>
+
                       </td>
 
                       {/* TUJUAN */}
 
                       <td className="px-5 py-4">
+
                         <p className="max-w-[220px] font-semibold">
                           {
                             log.destination
                           }
                         </p>
+
                       </td>
 
                       {/* KEPERLUAN */}
 
                       <td className="px-5 py-4">
+
                         <p className="max-w-[250px] text-slate-600">
                           {log.purpose ||
                             '-'}
                         </p>
+
                       </td>
 
                       {/* JAM KELUAR */}
@@ -1251,72 +1425,91 @@ function Logs() {
                       {/* TOTAL KM */}
 
                       <td className="px-5 py-4">
+
                         {log.total_distance ===
                         null ? (
+
                           <span className="text-slate-400">
                             Belum kembali
                           </span>
+
                         ) : (
+
                           <span className="font-bold text-emerald-700">
                             {fmt(
                               log.total_distance
                             )}{' '}
                             KM
                           </span>
+
                         )}
+
                       </td>
 
                       {/* KONDISI */}
 
                       <td className="px-5 py-4">
+
                         <span className="whitespace-nowrap">
                           {log.vehicle_condition ||
                             '-'}
                         </span>
+
                       </td>
 
                       {/* CATATAN */}
 
                       <td className="px-5 py-4">
+
                         <p className="max-w-[250px] whitespace-normal text-slate-600">
                           {log.notes ||
                             '-'}
                         </p>
+
                       </td>
 
                       {/* FOTO ODOMETER KELUAR */}
 
                       <td className="px-5 py-4">
+
                         <PhotoLink
                           path={
                             log.exit_odometer_photo
                           }
                           label="Lihat Foto"
                         />
+
                       </td>
 
                       {/* FOTO ODOMETER MASUK */}
 
                       <td className="px-5 py-4">
+
                         <PhotoLink
                           path={
                             log.entry_odometer_photo
                           }
                           label="Lihat Foto"
                         />
+
                       </td>
+
                     </tr>
+
                   )
                 )
+
               )}
+
             </tbody>
+
           </table>
+
         </div>
       </div>
     </>
   );
 }
-
 /* =========================================================
    VEHICLES
 ========================================================= */

@@ -5,7 +5,7 @@ import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'SAR Vehicle Log',
+  title: 'SIKATAR — Sistem Informasi Kendaraan Kantor SAR Tarakan',
   description: 'Pencatatan kendaraan operasional SAR',
 };
 

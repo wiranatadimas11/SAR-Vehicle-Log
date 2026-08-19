@@ -2210,181 +2210,131 @@ function Vehicles() {
 }
 
 /* =========================================================
-   REPORTS
+   REPORTS (DIRECT TO GOOGLE SPREADSHEET LINK)
 ========================================================= */
 
+// Masukkan URL Deployment Google Apps Script Anda di sini
+const GOOGLE_SCRIPT_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbw7UbvLFZnru1r94YIkSZicmlCTZjXmxsxUWhl1KPqr4VpAC39Q0wQb6N8umbloc2Dm/exec';
+
 function Reports() {
-  const {
-    vehicles,
-    logs,
-  } = useData();
+  const { vehicles, logs } = useData();
 
-  const [from, setFrom] =
-    useState(today());
+  const [from, setFrom] = useState(today());
+  const [to, setTo] = useState(today());
+  const [vehicle, setVehicle] = useState('');
+  const [q, setQ] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [sheetUrl, setSheetUrl] = useState<string | null>(null);
 
-  const [to, setTo] =
-    useState(today());
+  const filtered = logs.filter((log) => {
+    const logDate = log.exit_time?.slice(0, 10);
 
-  const [vehicle, setVehicle] =
-    useState('');
-
-  const [q, setQ] =
-    useState('');
-
-  const filtered =
-    logs.filter(
-      (log) => {
-        const logDate =
-          log.exit_time?.slice(
-            0,
-            10
-          );
-
-        return (
-          Boolean(logDate) &&
-          logDate! >= from &&
-          logDate! <= to &&
-          (!vehicle ||
-            log.vehicle_id ===
-              vehicle) &&
-          (!q ||
-            log.personnel_name
-              .toLowerCase()
-              .includes(
-                q.toLowerCase()
-              ))
-        );
-      }
+    return (
+      Boolean(logDate) &&
+      logDate! >= from &&
+      logDate! <= to &&
+      (!vehicle || log.vehicle_id === vehicle) &&
+      (!q ||
+        log.personnel_name
+          .toLowerCase()
+          .includes(q.toLowerCase()))
     );
+  });
 
-  const totalDistance =
-    filtered.reduce(
-      (sum, log) =>
-        sum +
-        Number(
-          log.total_distance ?? 0
-        ),
-      0
-    );
+  const totalDistance = filtered.reduce(
+    (sum, log) => sum + Number(log.total_distance ?? 0),
+    0
+  );
 
-  const fuelData =
-    filtered.filter(
-      (log) =>
-        log.fuel_used_percentage !==
-          null &&
-        log.fuel_used_percentage !==
-          undefined
-    );
+  const fuelData = filtered.filter(
+    (log) =>
+      log.fuel_used_percentage !== null &&
+      log.fuel_used_percentage !== undefined
+  );
 
-  const totalFuelUsed =
-    fuelData.reduce(
-      (sum, log) =>
-        sum +
-        Number(
-          log.fuel_used_percentage ??
-            0
-        ),
-      0
-    );
+  const totalFuelUsed = fuelData.reduce(
+    (sum, log) => sum + Number(log.fuel_used_percentage ?? 0),
+    0
+  );
 
   const averageFuelUsed =
-    fuelData.length > 0
-      ? totalFuelUsed /
-        fuelData.length
-      : 0;
+    fuelData.length > 0 ? totalFuelUsed / fuelData.length : 0;
 
-  const exportFile = () => {
-    const rows =
-      filtered.map(
-        (log, index) => ({
-          No: index + 1,
+  // Fungsi untuk mengekstrak Public URL Foto dari Supabase Storage
+  const getPublicPhoto = (path: string | null | undefined) => {
+    if (!path) return '';
+    const { data } = supabase.storage.from('vehicle-odometer').getPublicUrl(path);
+    return data?.publicUrl ?? '';
+  };
 
-          Tanggal:
-            log.exit_time
-              ? new Date(
-                  log.exit_time
-                ).toLocaleDateString(
-                  'id-ID'
-                )
-              : '',
+  const exportDirectToGoogleSheet = async () => {
+    if (filtered.length === 0) {
+      alert('Tidak ada data log pada filter tanggal yang dipilih.');
+      return;
+    }
 
-          'Nama Personel':
-            log.personnel_name,
+    if (GOOGLE_SCRIPT_WEBAPP_URL.includes('PASTE_URL')) {
+      alert('Silakan isi GOOGLE_SCRIPT_WEBAPP_URL dengan URL Apps Script Anda terlebih dahulu.');
+      return;
+    }
 
-          Kendaraan:
-            log.vehicle?.name ??
-            '',
+    setExporting(true);
+    setSheetUrl(null);
 
-          Tujuan:
-            log.destination ??
-            '',
+    try {
+      // Susun payload data yang menyertakan link foto Supabase
+      const payloadData = filtered.map((log) => ({
+        date: log.exit_time ? onlyDate(log.exit_time) : '-',
+        personnel_name: log.personnel_name || '-',
+        vehicle_name: log.vehicle?.name || '-',
+        destination: log.destination || '-',
+        purpose: log.purpose || '-',
+        exit_time: date(log.exit_time),
+        entry_time: date(log.entry_time),
+        km_exit: log.km_exit ?? 0,
+        km_entry: log.km_entry ?? 0,
+        total_distance: log.total_distance ?? 0,
+        fuel_exit: log.fuel_exit_percentage ?? 0,
+        fuel_entry: log.fuel_entry_percentage ?? 0,
+        fuel_used: log.fuel_used_percentage ?? 0,
+        condition: log.vehicle_condition || '-',
+        notes: log.notes || '-',
+        exit_photo: getPublicPhoto(log.exit_odometer_photo),
+        entry_photo: getPublicPhoto(log.entry_odometer_photo),
+      }));
 
-          Keperluan:
-            log.purpose ?? '',
+      // Buka window popup lebih dulu untuk menghindari blokir popup browser
+      const newTab = window.open('', '_blank');
 
-          'Jam Keluar':
-            date(
-              log.exit_time
-            ),
+      const response = await fetch(GOOGLE_SCRIPT_WEBAPP_URL, {
+        method: 'POST',
+        mode: 'cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          title: `Laporan Kendaraan SAR (${from} s.d ${to})`,
+          data: payloadData,
+        }),
+      });
 
-          'Jam Masuk':
-            date(
-              log.entry_time
-            ),
+      const res = await response.json();
 
-          'KM Keluar':
-            log.km_exit,
-
-          'KM Masuk':
-            log.km_entry,
-
-          'Total KM':
-            log.total_distance,
-
-          'Bensin Keluar (%)':
-            log.fuel_exit_percentage,
-
-          'Bensin Masuk (%)':
-            log.fuel_entry_percentage,
-
-          'Bensin Terpakai (%)':
-            log.fuel_used_percentage,
-
-          'Kondisi Kendaraan':
-            log.vehicle_condition ??
-            '',
-
-          Catatan:
-            log.notes ?? '',
-
-          'Bukti Odometer Keluar':
-            log.exit_odometer_photo ??
-            '',
-
-          'Bukti Odometer Masuk':
-            log.entry_odometer_photo ??
-            '',
-        })
-      );
-
-    const sheet =
-      XLSX.utils.json_to_sheet(
-        rows
-      );
-
-    const book =
-      XLSX.utils.book_new();
-
-    XLSX.utils.book_append_sheet(
-      book,
-      sheet,
-      'Log Kendaraan'
-    );
-
-    XLSX.writeFile(
-      book,
-      `Laporan_Log_Kendaraan_SAR_${from}_${to}.xlsx`
-    );
+      if (res.status === 'success' && res.url) {
+        setSheetUrl(res.url);
+        if (newTab) {
+          newTab.location.href = res.url;
+        } else {
+          window.open(res.url, '_blank');
+        }
+      } else {
+        if (newTab) newTab.close();
+        alert(`Gagal membuat spreadsheet: ${res.message || 'Terjadi kesalahan'}`);
+      }
+    } catch (err) {
+      console.error('EXPORT ERROR:', err);
+      alert('Gagal menghubungi Google Apps Script. Pastikan Web App diset ke "Anyone".');
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -2392,88 +2342,52 @@ function Reports() {
       <PageTitle
         eyebrow="Reporting"
         title="Laporan kendaraan"
-        description="Pilih periode dan unduh data log dalam format Excel."
+        description="Pilih periode dan ekspor log langsung ke Google Spreadsheet online beserta link foto."
       />
 
       <div className="card grid gap-4 p-5 md:grid-cols-4">
         <label>
-          <span className="label">
-            Tanggal mulai
-          </span>
-
+          <span className="label">Tanggal mulai</span>
           <input
             className="field"
             type="date"
             value={from}
-            onChange={(e) =>
-              setFrom(
-                e.target.value
-              )
-            }
+            onChange={(e) => setFrom(e.target.value)}
           />
         </label>
 
         <label>
-          <span className="label">
-            Tanggal akhir
-          </span>
-
+          <span className="label">Tanggal akhir</span>
           <input
             className="field"
             type="date"
             value={to}
-            onChange={(e) =>
-              setTo(
-                e.target.value
-              )
-            }
+            onChange={(e) => setTo(e.target.value)}
           />
         </label>
 
         <label>
-          <span className="label">
-            Kendaraan
-          </span>
-
+          <span className="label">Kendaraan</span>
           <select
             className="field"
             value={vehicle}
-            onChange={(e) =>
-              setVehicle(
-                e.target.value
-              )
-            }
+            onChange={(e) => setVehicle(e.target.value)}
           >
-            <option value="">
-              Semua kendaraan
-            </option>
-
-            {vehicles.map(
-              (v) => (
-                <option
-                  key={v.id}
-                  value={v.id}
-                >
-                  {v.name}
-                </option>
-              )
-            )}
+            <option value="">Semua kendaraan</option>
+            {vehicles.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
           </select>
         </label>
 
         <label>
-          <span className="label">
-            Nama personel
-          </span>
-
+          <span className="label">Nama personel</span>
           <input
             className="field"
             value={q}
-            onChange={(e) =>
-              setQ(
-                e.target.value
-              )
-            }
+            onChange={(e) => setQ(e.target.value)}
             placeholder="Semua personel"
           />
         </label>
@@ -2490,16 +2404,9 @@ function Reports() {
               <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
                 Total perjalanan
               </p>
-
-              <p className="mt-1 text-2xl font-black">
-                {filtered.length}
-              </p>
+              <p className="mt-1 text-2xl font-black">{filtered.length}</p>
             </div>
-
-            <FileText
-              size={22}
-              className="text-slate-400"
-            />
+            <FileText size={22} className="text-slate-400" />
           </div>
         </div>
 
@@ -2509,19 +2416,9 @@ function Reports() {
               <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
                 Total jarak
               </p>
-
-              <p className="mt-1 text-2xl font-black">
-                {fmt(
-                  totalDistance
-                )}{' '}
-                KM
-              </p>
+              <p className="mt-1 text-2xl font-black">{fmt(totalDistance)} KM</p>
             </div>
-
-            <TrendingDown
-              size={22}
-              className="text-emerald-600"
-            />
+            <TrendingDown size={22} className="text-emerald-600" />
           </div>
         </div>
 
@@ -2531,42 +2428,44 @@ function Reports() {
               <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
                 Rata-rata bensin
               </p>
-
               <p className="mt-1 text-2xl font-black text-red-700">
-                {fuelData.length >
-                0
-                  ? `${fmtDecimal(
-                      averageFuelUsed
-                    )}%`
-                  : '-'}
+                {fuelData.length > 0 ? `${fmtDecimal(averageFuelUsed)}%` : '-'}
               </p>
             </div>
-
-            <Fuel
-              size={22}
-              className="text-red-600"
-            />
+            <Fuel size={22} className="text-red-600" />
           </div>
         </div>
       </div>
 
+      {/* NOTIFIKASI JIKA LINK SPREADSHEET BERHASIL DIBUAT */}
+      {sheetUrl && (
+        <div className="mt-4 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <p className="text-xs font-semibold text-emerald-800">
+            ✓ Spreadsheet berhasil dibuat dan dibuka di tab baru.
+          </p>
+          <a
+            href={sheetUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-bold text-emerald-900 underline hover:text-emerald-700"
+          >
+            Buka Spreadsheet Lagi
+          </a>
+        </div>
+      )}
+
       <div className="mt-5 flex items-center justify-between">
         <p className="text-sm text-slate-500">
-          Menampilkan{' '}
-          <strong className="text-slate-900">
-            {filtered.length}
-          </strong>{' '}
-          log.
+          Menampilkan <strong className="text-slate-900">{filtered.length}</strong> log.
         </p>
 
         <button
-          onClick={
-            exportFile
-          }
-          className="flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-800"
+          disabled={exporting}
+          onClick={exportDirectToGoogleSheet}
+          className="flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-700/20 transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Download size={17} />
-          Export Excel
+          {exporting ? 'Membuat Spreadsheet...' : 'Buka di Google Spreadsheet'}
         </button>
       </div>
 
@@ -2579,120 +2478,52 @@ function Reports() {
           <table className="w-full min-w-[1200px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="px-5 py-4">
-                  Tanggal
-                </th>
-
-                <th className="px-5 py-4">
-                  Kendaraan
-                </th>
-
-                <th className="px-5 py-4">
-                  Personel
-                </th>
-
-                <th className="px-5 py-4">
-                  Tujuan
-                </th>
-
-                <th className="px-5 py-4">
-                  Total KM
-                </th>
-
-                <th className="px-5 py-4">
-                  Bensin Keluar
-                </th>
-
-                <th className="px-5 py-4">
-                  Bensin Masuk
-                </th>
-
-                <th className="px-5 py-4">
-                  Bensin Terpakai
-                </th>
+                <th className="px-5 py-4">Tanggal</th>
+                <th className="px-5 py-4">Kendaraan</th>
+                <th className="px-5 py-4">Personel</th>
+                <th className="px-5 py-4">Tujuan</th>
+                <th className="px-5 py-4">Total KM</th>
+                <th className="px-5 py-4">Bensin Keluar</th>
+                <th className="px-5 py-4">Bensin Masuk</th>
+                <th className="px-5 py-4">Bensin Terpakai</th>
               </tr>
             </thead>
 
             <tbody className="divide-y">
-              {filtered.map(
-                (log) => (
-                  <tr
-                    key={log.id}
-                    className="hover:bg-slate-50"
-                  >
-                    <td className="px-5 py-4">
-                      {onlyDate(
-                        log.exit_time
-                      )}
-                    </td>
+              {filtered.map((log) => (
+                <tr key={log.id} className="hover:bg-slate-50">
+                  <td className="px-5 py-4">{onlyDate(log.exit_time)}</td>
+                  <td className="px-5 py-4 font-semibold">{log.vehicle?.name}</td>
+                  <td className="px-5 py-4">{log.personnel_name}</td>
+                  <td className="px-5 py-4">{log.destination}</td>
+                  <td className="px-5 py-4 font-bold text-emerald-700">
+                    {log.total_distance === null
+                      ? '-'
+                      : `${fmt(log.total_distance)} KM`}
+                  </td>
+                  <td className="px-5 py-4">
+                    {log.fuel_exit_percentage === null
+                      ? '-'
+                      : `${fmtDecimal(log.fuel_exit_percentage)}%`}
+                  </td>
+                  <td className="px-5 py-4">
+                    {log.fuel_entry_percentage === null
+                      ? '-'
+                      : `${fmtDecimal(log.fuel_entry_percentage)}%`}
+                  </td>
+                  <td className="px-5 py-4">
+                    <FuelBadge value={log.fuel_used_percentage} />
+                  </td>
+                </tr>
+              ))}
 
-                    <td className="px-5 py-4 font-semibold">
-                      {
-                        log.vehicle
-                          ?.name
-                      }
-                    </td>
-
-                    <td className="px-5 py-4">
-                      {
-                        log.personnel_name
-                      }
-                    </td>
-
-                    <td className="px-5 py-4">
-                      {
-                        log.destination
-                      }
-                    </td>
-
-                    <td className="px-5 py-4 font-bold text-emerald-700">
-                      {log.total_distance ===
-                      null
-                        ? '-'
-                        : `${fmt(
-                            log.total_distance
-                          )} KM`}
-                    </td>
-
-                    <td className="px-5 py-4">
-                      {log.fuel_exit_percentage ===
-                      null
-                        ? '-'
-                        : `${fmtDecimal(
-                            log.fuel_exit_percentage
-                          )}%`}
-                    </td>
-
-                    <td className="px-5 py-4">
-                      {log.fuel_entry_percentage ===
-                      null
-                        ? '-'
-                        : `${fmtDecimal(
-                            log.fuel_entry_percentage
-                          )}%`}
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <FuelBadge
-                        value={
-                          log.fuel_used_percentage
-                        }
-                      />
-                    </td>
-                  </tr>
-                )
-              )}
-
-              {filtered.length ===
-                0 && (
+              {filtered.length === 0 && (
                 <tr>
                   <td
                     colSpan={8}
                     className="p-8 text-center text-slate-500"
                   >
-                    Tidak ada data
-                    untuk periode
-                    yang dipilih.
+                    Tidak ada data untuk periode yang dipilih.
                   </td>
                 </tr>
               )}

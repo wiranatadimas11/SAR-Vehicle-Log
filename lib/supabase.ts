@@ -12,6 +12,7 @@ export type Vehicle = {
   name: string;
   status: VehicleStatus;
   current_km: number;
+  fuel_tank_capacity_liters: number | null;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -35,5 +36,8 @@ export type VehicleLog = {
   total_fuel_percentage: number | null;
   vehicle_condition: string;
   notes: string | null;
-  vehicle?: Pick<Vehicle, 'name'>;
+  vehicle?: {
+    name: string;
+    fuel_tank_capacity_liters: number | null;
+  } | null;
 };
